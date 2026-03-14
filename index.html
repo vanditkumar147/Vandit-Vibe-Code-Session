@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Personal Finance Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root {
     --bg: #f4f6f9;
@@ -233,6 +234,22 @@
   }
   .tab-bar button.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-bar button:hover { color: var(--text); }
+
+  .cat-bar { cursor: pointer; }
+  .cat-bar:hover { background: #f8fafc; border-radius: 6px; }
+  .cat-drilldown {
+    margin: 0 0 16px 0; padding: 12px 16px;
+    background: #f8fafc; border-radius: 8px; border: 1px solid var(--border);
+  }
+  .cat-drilldown-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; font-size: .875rem; font-weight: 600;
+  }
+  .cat-drilldown-close {
+    background: none; border: none; cursor: pointer; color: var(--text-light);
+    font-size: 1.1rem; padding: 2px 6px; border-radius: 4px;
+  }
+  .cat-drilldown-close:hover { background: var(--border); }
 </style>
 </head>
 <body>
@@ -458,10 +475,10 @@
       <input type="month" id="upload-cc-month">
     </div>
     <div class="upload-area" id="cc-upload-area">
-      <input type="file" accept=".csv" id="cc-file-input" onchange="handleCCFileSelect(event)">
+      <input type="file" accept=".csv,.pdf" id="cc-file-input" onchange="handleCCFileSelect(event)">
       <div class="upload-icon">&#128196;</div>
-      <p>Click or drag a CSV file here</p>
-      <p class="text-muted mt-2" style="font-size:.75rem;">Expected columns: Date, Description, Amount</p>
+      <p>Click or drag a CSV or PDF file here</p>
+      <p class="text-muted mt-2" style="font-size:.75rem;">CSV: Date, Description, Amount columns &middot; PDF: statement will be parsed automatically</p>
     </div>
     <div id="cc-upload-preview" class="mt-4" style="display:none;"></div>
     <div class="modal-actions">
@@ -554,6 +571,11 @@
 </div>
 
 <script>
+// Set up PDF.js worker
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
 // ════════════════════════════════════════════════════════════════
 // DATA LAYER — localStorage
 // ════════════════════════════════════════════════════════════════
@@ -694,37 +716,111 @@ function openUploadCCModal(cardId) {
 function handleCCFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
+
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    handleCCPdfFile(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const rows = parseCSV(e.target.result);
+      processCCRows(rows);
+    };
+    reader.readAsText(file);
+  }
+}
+
+function handleCCPdfFile(file) {
   const reader = new FileReader();
-  reader.onload = function(e) {
-    const rows = parseCSV(e.target.result);
-    pendingCCTransactions = rows.map(row => ({
-      id: genId(),
-      cardId: document.getElementById('upload-cc-card-id').value,
-      month: document.getElementById('upload-cc-month').value,
-      date: normalizeDate(row.date),
-      description: row.description,
-      amount: Math.abs(parseFloat(row.amount)) || 0,
-      category: autoCategorize(row.description)
-    })).filter(t => t.amount > 0);
-
-    if (pendingCCTransactions.length === 0) {
-      document.getElementById('cc-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found. Ensure CSV has Date, Description, and Amount columns.</p>';
+  reader.onload = async function(e) {
+    try {
+      document.getElementById('cc-upload-preview').innerHTML = '<p style="font-size:.875rem;">Parsing PDF... please wait.</p>';
       document.getElementById('cc-upload-preview').style.display = 'block';
-      return;
-    }
 
-    let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingCCTransactions.length + '</strong> transactions found:</p>';
-    html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th></tr>';
-    pendingCCTransactions.slice(0, 20).forEach(t => {
-      html += `<tr><td>${t.date}</td><td>${t.description}</td><td>$${t.amount.toFixed(2)}</td><td><span class="badge badge-${t.category.toLowerCase().replace(/\s/g,'')}">${t.category}</span></td></tr>`;
-    });
-    if (pendingCCTransactions.length > 20) html += `<tr><td colspan="4" class="text-muted">...and ${pendingCCTransactions.length - 20} more</td></tr>`;
-    html += '</table></div>';
-    document.getElementById('cc-upload-preview').innerHTML = html;
-    document.getElementById('cc-upload-preview').style.display = 'block';
-    document.getElementById('cc-upload-confirm').disabled = false;
+      const typedArray = new Uint8Array(e.target.result);
+      const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const lines = [];
+        let lastY = null;
+        content.items.forEach(item => {
+          const y = Math.round(item.transform[5]);
+          if (lastY !== null && Math.abs(y - lastY) > 3) lines.push('\n');
+          lines.push(item.str);
+          lastY = y;
+        });
+        fullText += lines.join(' ') + '\n';
+      }
+      const rows = parsePDFText(fullText);
+      processCCRows(rows);
+    } catch (err) {
+      document.getElementById('cc-upload-preview').innerHTML = '<p class="text-danger">Failed to parse PDF: ' + err.message + '</p>';
+      document.getElementById('cc-upload-preview').style.display = 'block';
+    }
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
+}
+
+function parsePDFText(text) {
+  const rows = [];
+  const lines = text.split('\n');
+  // Match lines that look like transactions: date followed by description and amount
+  // Common patterns: "Jan 15" or "01/15" or "2025-01-15" then description then $amount or amount
+  const datePatterns = [
+    /^(\w{3}\s+\d{1,2}(?:,?\s*\d{4})?)\s+(.+?)\s+\$?([\d,]+\.\d{2})\s*$/,          // "Jan 15, 2025 STORE NAME 42.50"
+    /^(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)\s+(.+?)\s+\$?([\d,]+\.\d{2})\s*$/,   // "01/15/2025 STORE NAME 42.50"
+    /^(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\s+(.+?)\s+\$?([\d,]+\.\d{2})\s*$/,           // "2025-01-15 STORE NAME 42.50"
+    /^(\w{3}\s+\d{1,2})\s+(\w{3}\s+\d{1,2})\s+(.+?)\s+\$?([\d,]+\.\d{2})\s*$/,       // "Jan 15 Jan 17 STORE NAME 42.50" (transaction date + posting date)
+  ];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    for (let p = 0; p < datePatterns.length; p++) {
+      const match = trimmed.match(datePatterns[p]);
+      if (match) {
+        if (p === 3) {
+          // Pattern with two dates (transaction + posting)
+          rows.push({ date: match[1], description: match[3].trim(), amount: match[4].replace(/,/g, '') });
+        } else {
+          rows.push({ date: match[1], description: match[2].trim(), amount: match[3].replace(/,/g, '') });
+        }
+        break;
+      }
+    }
+  }
+  return rows;
+}
+
+function processCCRows(rows) {
+  pendingCCTransactions = rows.map(row => ({
+    id: genId(),
+    cardId: document.getElementById('upload-cc-card-id').value,
+    month: document.getElementById('upload-cc-month').value,
+    date: normalizeDate(row.date),
+    description: row.description,
+    amount: Math.abs(parseFloat(row.amount)) || 0,
+    category: autoCategorize(row.description)
+  })).filter(t => t.amount > 0);
+
+  if (pendingCCTransactions.length === 0) {
+    document.getElementById('cc-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found. Ensure the file contains transaction data with dates, descriptions, and amounts.</p>';
+    document.getElementById('cc-upload-preview').style.display = 'block';
+    return;
+  }
+
+  let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingCCTransactions.length + '</strong> transactions found:</p>';
+  html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th></tr>';
+  pendingCCTransactions.slice(0, 20).forEach(t => {
+    html += `<tr><td>${t.date}</td><td>${t.description}</td><td>$${t.amount.toFixed(2)}</td><td><span class="badge badge-${t.category.toLowerCase().replace(/\s/g,'')}">${t.category}</span></td></tr>`;
+  });
+  if (pendingCCTransactions.length > 20) html += `<tr><td colspan="4" class="text-muted">...and ${pendingCCTransactions.length - 20} more</td></tr>`;
+  html += '</table></div>';
+  document.getElementById('cc-upload-preview').innerHTML = html;
+  document.getElementById('cc-upload-preview').style.display = 'block';
+  document.getElementById('cc-upload-confirm').disabled = false;
 }
 
 function confirmCCUpload() {
@@ -863,7 +959,7 @@ function renderCCCards() {
         <div class="sub">Due: ${card.dueDate} &middot; ${dueText}</div>
         <div class="sub text-muted">${card.rewards === 'travel' ? 'Travel Rewards' : 'Cash Back'}</div>
         <div class="mt-2" style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-sm btn-primary" onclick="openUploadCCModal('${card.id}')">Upload CSV</button>
+          <button class="btn btn-sm btn-primary" onclick="openUploadCCModal('${card.id}')">Upload Statement</button>
           <button class="btn btn-sm btn-secondary" onclick="openEditCardModal('${card.id}')">Edit</button>
           <button class="btn btn-sm btn-danger" onclick="deleteCard('${card.id}')">Delete</button>
         </div>
@@ -936,17 +1032,53 @@ function renderCCSummary() {
   const maxVal = Math.max(...Object.values(totals), 1);
   const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
 
-  let html = `<div style="font-size:.875rem;margin-bottom:16px;">Total spending: <strong>$${grandTotal.toFixed(2)} CAD</strong></div>`;
+  let html = `<div style="font-size:.875rem;margin-bottom:4px;">Total spending: <strong>$${grandTotal.toFixed(2)} CAD</strong></div>`;
+  html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:16px;">Double-click a category to see its transactions</p>`;
   ALL_CATEGORIES.forEach(cat => {
     if (totals[cat] === 0) return;
     const pct = (totals[cat] / maxVal) * 100;
-    html += `<div class="cat-bar">
+    const escapedCat = cat.replace(/'/g, "\\'");
+    html += `<div class="cat-bar" ondblclick="drillDownCategory('${escapedCat}')">
       <div class="cat-label"><span>${cat}</span><span>$${totals[cat].toFixed(2)}</span></div>
       <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
     </div>`;
   });
+  html += '<div id="cc-category-drilldown"></div>';
 
   document.getElementById('cc-category-bars').innerHTML = html;
+}
+
+function drillDownCategory(category) {
+  const month = document.getElementById('cc-month-select').value;
+  const txns = ccTransactions.filter(t => t.category === category && (t.month || t.date.slice(0, 7)) === month);
+  const container = document.getElementById('cc-category-drilldown');
+
+  if (txns.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  txns.sort((a, b) => b.date.localeCompare(a.date));
+  const badgeClass = 'badge-' + category.toLowerCase().replace(/\s/g, '');
+
+  let html = `<div class="cat-drilldown">
+    <div class="cat-drilldown-header">
+      <span><span class="badge ${badgeClass}">${category}</span> &mdash; ${txns.length} transaction${txns.length !== 1 ? 's' : ''}</span>
+      <button class="cat-drilldown-close" onclick="document.getElementById('cc-category-drilldown').innerHTML=''">&times;</button>
+    </div>
+    <table><tr><th>Date</th><th>Card</th><th>Description</th><th>Amount</th><th></th></tr>`;
+  txns.forEach(t => {
+    const card = creditCards.find(c => c.id === t.cardId);
+    html += `<tr>
+      <td>${t.date}</td>
+      <td>${card ? card.name : 'Unknown'}</td>
+      <td>${t.description}</td>
+      <td>$${t.amount.toFixed(2)}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="openRecategorize('${t.id}','cc')">Re-cat</button></td>
+    </tr>`;
+  });
+  html += '</table></div>';
+  container.innerHTML = html;
 }
 
 function renderPerCard() {
