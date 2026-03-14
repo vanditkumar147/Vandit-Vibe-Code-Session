@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinanceTracker — Personal Finance Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --sidebar-bg: #1e293b;
+    --sidebar-hover: #334155;
+    --sidebar-active: #3b82f6;
+    --card-bg: #ffffff;
+    --text: #1e293b;
+    --text-light: #64748b;
+    --border: #e2e8f0;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 240px;
+    background: var(--sidebar-bg);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+  .sidebar-brand {
+    padding: 24px 20px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -.5px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .sidebar-brand span { color: var(--accent); }
+  .sidebar-nav { flex: 1; padding: 12px 0; }
+  .sidebar-nav button {
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; padding: 12px 20px;
+    background: none; border: none; color: #94a3b8;
+    font-size: .938rem; cursor: pointer;
+    transition: all .15s;
+  }
+  .sidebar-nav button:hover { background: var(--sidebar-hover); color: #fff; }
+  .sidebar-nav button.active { background: var(--sidebar-active); color: #fff; border-radius: 0; }
+  .sidebar-nav button svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+  /* ── Main ── */
+  .main { flex: 1; margin-left: 240px; padding: 32px; min-height: 100vh; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .page-header { margin-bottom: 28px; }
+  .page-header h1 { font-size: 1.5rem; font-weight: 700; }
+  .page-header p { color: var(--text-light); margin-top: 4px; }
+
+  /* ── Cards / Panels ── */
+  .panel {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .panel-title {
+    font-size: 1rem; font-weight: 600; margin-bottom: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  /* ── Grid helpers ── */
+  .grid { display: grid; gap: 20px; }
+  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+
+  /* ── Stat cards ── */
+  .stat-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+  }
+  .stat-card .label { font-size: .813rem; color: var(--text-light); margin-bottom: 4px; }
+  .stat-card .value { font-size: 1.5rem; font-weight: 700; }
+  .stat-card .sub { font-size: .813rem; color: var(--text-light); margin-top: 4px; }
+  .stat-card.due-soon { border-left: 4px solid var(--danger); }
+  .stat-card.due-ok { border-left: 4px solid var(--success); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 6px;
+    font-size: .875rem; font-weight: 500;
+    border: none; cursor: pointer; transition: all .15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--border); color: var(--text); }
+  .btn-secondary:hover { background: #cbd5e1; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-sm { padding: 5px 10px; font-size: .8rem; }
+
+  /* ── Forms ── */
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: .813rem; font-weight: 500; margin-bottom: 4px; }
+  .form-group input, .form-group select {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .875rem; background: #fff;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+  }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 200;
+    justify-content: center; align-items: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff; border-radius: var(--radius);
+    padding: 28px; width: 480px; max-width: 95vw;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  }
+  .modal h2 { font-size: 1.125rem; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); color: var(--text-light); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .5px; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: #f8fafc; }
+
+  .badge {
+    display: inline-block; padding: 3px 8px; border-radius: 20px;
+    font-size: .75rem; font-weight: 500;
+  }
+  .badge-eating { background: #fef3c7; color: #92400e; }
+  .badge-groceries { background: #d1fae5; color: #065f46; }
+  .badge-travel { background: #dbeafe; color: #1e40af; }
+  .badge-gas { background: #e0e7ff; color: #3730a3; }
+  .badge-shopping { background: #fce7f3; color: #9d174d; }
+  .badge-entertainment { background: #ede9fe; color: #5b21b6; }
+  .badge-subscriptions { background: #cffafe; color: #155e75; }
+  .badge-health { background: #fecaca; color: #991b1b; }
+  .badge-other { background: #f1f5f9; color: #475569; }
+  .badge-income { background: #d1fae5; color: #065f46; }
+  .badge-expense { background: #fecaca; color: #991b1b; }
+
+  .category-colors {
+    --eating: #f59e0b; --groceries: #22c55e; --travel: #3b82f6;
+    --gas: #6366f1; --shopping: #ec4899; --entertainment: #8b5cf6;
+    --subscriptions: #06b6d4; --health: #ef4444; --other: #94a3b8;
+  }
+
+  /* ── Chart container ── */
+  .chart-container { position: relative; width: 100%; height: 300px; }
+  .chart-container canvas { width: 100% !important; height: 100% !important; }
+
+  /* ── Category bar chart ── */
+  .cat-bar { margin-bottom: 10px; }
+  .cat-bar .cat-label { display: flex; justify-content: space-between; font-size: .813rem; margin-bottom: 3px; }
+  .cat-bar .cat-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .cat-bar .cat-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+
+  /* ── Upload area ── */
+  .upload-area {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 32px; text-align: center; cursor: pointer;
+    transition: all .15s; position: relative;
+  }
+  .upload-area:hover { border-color: var(--accent); background: #f0f5ff; }
+  .upload-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-area p { color: var(--text-light); font-size: .875rem; }
+  .upload-area .upload-icon { font-size: 2rem; margin-bottom: 8px; color: var(--accent); }
+
+  /* ── Month selector ── */
+  .month-selector {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .month-selector select {
+    padding: 6px 12px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: .875rem;
+  }
+
+  /* ── Misc ── */
+  .text-danger { color: var(--danger); }
+  .text-success { color: var(--success); }
+  .text-muted { color: var(--text-light); }
+  .mt-2 { margin-top: 8px; }
+  .mt-4 { margin-top: 16px; }
+  .mb-4 { margin-bottom: 16px; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .empty-state { text-align: center; padding: 48px 20px; color: var(--text-light); }
+  .empty-state .empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: .4; }
+
+  .card-type-icon { font-size: .75rem; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .card-type-visa { background: #1a1f71; color: #fff; }
+  .card-type-mastercard { background: #eb001b; color: #fff; }
+  .card-type-amex { background: #006fcf; color: #fff; }
+
+  .tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+  .tab-bar button {
+    padding: 10px 20px; background: none; border: none; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; font-size: .875rem; font-weight: 500;
+    color: var(--text-light); cursor: pointer; transition: all .15s;
+  }
+  .tab-bar button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-bar button:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-brand"><span>Finance</span>Tracker</div>
+  <div class="sidebar-nav">
+    <button class="active" data-page="credit-cards">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Credit Cards
+    </button>
+    <button data-page="bank-accounts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      Bank Accounts
+    </button>
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main">
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- CREDIT CARDS PAGE                           -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="page-credit-cards" class="page active">
+    <div class="page-header flex-between">
+      <div>
+        <h1>Credit Cards</h1>
+        <p>Track balances, due dates, and spending across all your cards.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openAddCardModal()">+ Add Card</button>
+    </div>
+
+    <!-- Cards overview -->
+    <div id="cc-cards-grid" class="grid grid-3 mb-4"></div>
+
+    <!-- Tabs: Combined / Per-Card -->
+    <div class="tab-bar" id="cc-tabs">
+      <button class="active" data-tab="cc-combined">Combined Summary</button>
+      <button data-tab="cc-percard">Per-Card Breakdown</button>
+      <button data-tab="cc-transactions">All Transactions</button>
+    </div>
+
+    <!-- Combined summary tab -->
+    <div id="tab-cc-combined" class="tab-content">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Spending by Category</span>
+          <div class="month-selector">
+            <label>Month:</label>
+            <select id="cc-month-select" onchange="renderCCSummary()"></select>
+          </div>
+        </div>
+        <div id="cc-category-bars"></div>
+        <div id="cc-category-empty" class="empty-state" style="display:none;">
+          <div class="empty-icon">&#128202;</div>
+          <p>No transactions yet. Upload a CSV statement to see spending data.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-card tab -->
+    <div id="tab-cc-percard" class="tab-content" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Per-Card Breakdown</span>
+          <div class="month-selector">
+            <label>Month:</label>
+            <select id="cc-percard-month" onchange="renderPerCard()"></select>
+          </div>
+        </div>
+        <div id="cc-percard-content"></div>
+      </div>
+    </div>
+
+    <!-- All transactions tab -->
+    <div id="tab-cc-transactions" class="tab-content" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Transactions</span>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="cc-txn-card-filter" onchange="renderCCTransactions()">
+              <option value="all">All Cards</option>
+            </select>
+            <select id="cc-txn-month-filter" onchange="renderCCTransactions()"></select>
+          </div>
+        </div>
+        <div id="cc-transactions-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- BANK ACCOUNTS PAGE                          -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="page-bank-accounts" class="page">
+    <div class="page-header flex-between">
+      <div>
+        <h1>Bank Accounts</h1>
+        <p>Track balances and cash flow across your bank accounts.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openAddBankModal()">+ Add Account</button>
+    </div>
+
+    <!-- Accounts overview -->
+    <div id="ba-cards-grid" class="grid grid-3 mb-4"></div>
+
+    <!-- Tabs -->
+    <div class="tab-bar" id="ba-tabs">
+      <button class="active" data-tab="ba-summary">Cash Flow Summary</button>
+      <button data-tab="ba-trend">Balance Trend</button>
+      <button data-tab="ba-transactions">Transactions</button>
+    </div>
+
+    <!-- Cash flow summary -->
+    <div id="tab-ba-summary" class="tab-content">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Income vs Expenses</span>
+          <div class="month-selector">
+            <label>Month:</label>
+            <select id="ba-month-select" onchange="renderBASummary()"></select>
+          </div>
+        </div>
+        <div id="ba-summary-content"></div>
+        <div id="ba-summary-empty" class="empty-state" style="display:none;">
+          <div class="empty-icon">&#128176;</div>
+          <p>No transactions yet. Upload a CSV statement to see cash flow data.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance trend -->
+    <div id="tab-ba-trend" class="tab-content" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Monthly Balance Trend</span>
+          <select id="ba-trend-account" onchange="renderBATrend()">
+            <option value="all">All Accounts</option>
+          </select>
+        </div>
+        <div class="chart-container">
+          <canvas id="ba-trend-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transactions -->
+    <div id="tab-ba-transactions" class="tab-content" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Transactions</span>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="ba-txn-acct-filter" onchange="renderBATransactions()">
+              <option value="all">All Accounts</option>
+            </select>
+            <select id="ba-txn-month-filter" onchange="renderBATransactions()"></select>
+          </div>
+        </div>
+        <div id="ba-transactions-table"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ══════════════════════════════════════ -->
+<!-- MODALS                                 -->
+<!-- ══════════════════════════════════════ -->
+
+<!-- Add Credit Card Modal -->
+<div class="modal-overlay" id="modal-add-card">
+  <div class="modal">
+    <h2 id="card-modal-title">Add Credit Card</h2>
+    <input type="hidden" id="edit-card-id">
+    <div class="form-group">
+      <label>Card Name</label>
+      <input type="text" id="card-name" placeholder="e.g. TD Visa Infinite">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Card Type</label>
+        <select id="card-type">
+          <option value="Visa">Visa</option>
+          <option value="Mastercard">Mastercard</option>
+          <option value="Amex">Amex</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Rewards Type</label>
+        <select id="card-rewards">
+          <option value="travel">Travel Rewards</option>
+          <option value="cashback">Cash Back</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Current Balance (CAD)</label>
+        <input type="number" step="0.01" id="card-balance" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label>Payment Due Date</label>
+        <input type="date" id="card-due">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-card')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCard()">Save Card</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload CSV for Credit Card -->
+<div class="modal-overlay" id="modal-upload-cc">
+  <div class="modal">
+    <h2>Upload Credit Card Statement</h2>
+    <p class="text-muted mb-4" id="upload-cc-card-name"></p>
+    <input type="hidden" id="upload-cc-card-id">
+    <div class="form-group">
+      <label>Statement Month</label>
+      <input type="month" id="upload-cc-month">
+    </div>
+    <div class="upload-area" id="cc-upload-area">
+      <input type="file" accept=".csv" id="cc-file-input" onchange="handleCCFileSelect(event)">
+      <div class="upload-icon">&#128196;</div>
+      <p>Click or drag a CSV file here</p>
+      <p class="text-muted mt-2" style="font-size:.75rem;">Expected columns: Date, Description, Amount</p>
+    </div>
+    <div id="cc-upload-preview" class="mt-4" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-upload-cc')">Cancel</button>
+      <button class="btn btn-primary" id="cc-upload-confirm" onclick="confirmCCUpload()" disabled>Import Transactions</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Bank Account Modal -->
+<div class="modal-overlay" id="modal-add-bank">
+  <div class="modal">
+    <h2 id="bank-modal-title">Add Bank Account</h2>
+    <input type="hidden" id="edit-bank-id">
+    <div class="form-group">
+      <label>Account Name</label>
+      <input type="text" id="bank-name" placeholder="e.g. TD Chequing">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Account Type</label>
+        <select id="bank-type">
+          <option value="chequing">Chequing</option>
+          <option value="savings">Savings</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Current Balance (CAD)</label>
+        <input type="number" step="0.01" id="bank-balance" placeholder="0.00">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-bank')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBank()">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload CSV for Bank Account -->
+<div class="modal-overlay" id="modal-upload-ba">
+  <div class="modal">
+    <h2>Upload Bank Statement</h2>
+    <p class="text-muted mb-4" id="upload-ba-acct-name"></p>
+    <input type="hidden" id="upload-ba-acct-id">
+    <div class="form-group">
+      <label>Statement Month</label>
+      <input type="month" id="upload-ba-month">
+    </div>
+    <div class="upload-area">
+      <input type="file" accept=".csv" id="ba-file-input" onchange="handleBAFileSelect(event)">
+      <div class="upload-icon">&#128196;</div>
+      <p>Click or drag a CSV file here</p>
+      <p class="text-muted mt-2" style="font-size:.75rem;">Expected columns: Date, Description, Amount</p>
+    </div>
+    <div id="ba-upload-preview" class="mt-4" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-upload-ba')">Cancel</button>
+      <button class="btn btn-primary" id="ba-upload-confirm" onclick="confirmBAUpload()" disabled>Import Transactions</button>
+    </div>
+  </div>
+</div>
+
+<!-- Re-categorize Modal -->
+<div class="modal-overlay" id="modal-recategorize">
+  <div class="modal">
+    <h2>Change Category</h2>
+    <p class="text-muted mb-4" id="recat-description"></p>
+    <input type="hidden" id="recat-txn-id">
+    <input type="hidden" id="recat-source">
+    <div class="form-group">
+      <label>Category</label>
+      <select id="recat-category">
+        <option value="Eating Out">Eating Out</option>
+        <option value="Groceries">Groceries</option>
+        <option value="Travel">Travel</option>
+        <option value="Gas">Gas</option>
+        <option value="Shopping">Shopping</option>
+        <option value="Entertainment">Entertainment</option>
+        <option value="Subscriptions">Subscriptions</option>
+        <option value="Health">Health</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-recategorize')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRecategorize()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// DATA LAYER — localStorage
+// ════════════════════════════════════════════════════════════════
+
+function loadData(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; }
+  catch { return fallback; }
+}
+function saveData(key, data) { localStorage.setItem(key, JSON.stringify(data)); }
+
+let creditCards = loadData('ft_credit_cards', []);
+let ccTransactions = loadData('ft_cc_transactions', []);
+let bankAccounts = loadData('ft_bank_accounts', []);
+let baTransactions = loadData('ft_ba_transactions', []);
+
+function persistCC() { saveData('ft_credit_cards', creditCards); }
+function persistCCTxn() { saveData('ft_cc_transactions', ccTransactions); }
+function persistBA() { saveData('ft_bank_accounts', bankAccounts); }
+function persistBATxn() { saveData('ft_ba_transactions', baTransactions); }
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// ════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════════════════
+
+document.querySelectorAll('.sidebar-nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    if (btn.dataset.page === 'bank-accounts') refreshBankPage();
+  });
+});
+
+// Tab switching
+document.querySelectorAll('.tab-bar').forEach(bar => {
+  bar.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parent = bar.closest('.page');
+      bar.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      parent.querySelectorAll('.tab-content').forEach(tc => tc.style.display = 'none');
+      document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+    });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════
+// MODAL HELPERS
+// ════════════════════════════════════════════════════════════════
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(ov => {
+  ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+});
+
+// ════════════════════════════════════════════════════════════════
+// CREDIT CARDS — CRUD
+// ════════════════════════════════════════════════════════════════
+
+function openAddCardModal() {
+  document.getElementById('card-modal-title').textContent = 'Add Credit Card';
+  document.getElementById('edit-card-id').value = '';
+  document.getElementById('card-name').value = '';
+  document.getElementById('card-type').value = 'Visa';
+  document.getElementById('card-rewards').value = 'travel';
+  document.getElementById('card-balance').value = '';
+  document.getElementById('card-due').value = '';
+  openModal('modal-add-card');
+}
+
+function openEditCardModal(id) {
+  const card = creditCards.find(c => c.id === id);
+  if (!card) return;
+  document.getElementById('card-modal-title').textContent = 'Edit Credit Card';
+  document.getElementById('edit-card-id').value = id;
+  document.getElementById('card-name').value = card.name;
+  document.getElementById('card-type').value = card.type;
+  document.getElementById('card-rewards').value = card.rewards;
+  document.getElementById('card-balance').value = card.balance;
+  document.getElementById('card-due').value = card.dueDate;
+  openModal('modal-add-card');
+}
+
+function saveCard() {
+  const editId = document.getElementById('edit-card-id').value;
+  const name = document.getElementById('card-name').value.trim();
+  const type = document.getElementById('card-type').value;
+  const rewards = document.getElementById('card-rewards').value;
+  const balance = parseFloat(document.getElementById('card-balance').value) || 0;
+  const dueDate = document.getElementById('card-due').value;
+  if (!name) return alert('Please enter a card name.');
+  if (!dueDate) return alert('Please select a due date.');
+  if (!editId && creditCards.length >= 10) return alert('Maximum of 10 credit cards allowed.');
+
+  if (editId) {
+    const card = creditCards.find(c => c.id === editId);
+    Object.assign(card, { name, type, rewards, balance, dueDate });
+  } else {
+    creditCards.push({ id: genId(), name, type, rewards, balance, dueDate });
+  }
+  persistCC();
+  closeModal('modal-add-card');
+  refreshCCPage();
+}
+
+function deleteCard(id) {
+  if (!confirm('Delete this card and all its transactions?')) return;
+  creditCards = creditCards.filter(c => c.id !== id);
+  ccTransactions = ccTransactions.filter(t => t.cardId !== id);
+  persistCC(); persistCCTxn();
+  refreshCCPage();
+}
+
+// ════════════════════════════════════════════════════════════════
+// CREDIT CARDS — CSV UPLOAD & PARSING
+// ════════════════════════════════════════════════════════════════
+
+let pendingCCTransactions = [];
+
+function openUploadCCModal(cardId) {
+  const card = creditCards.find(c => c.id === cardId);
+  document.getElementById('upload-cc-card-id').value = cardId;
+  document.getElementById('upload-cc-card-name').textContent = card.name;
+  document.getElementById('upload-cc-month').value = new Date().toISOString().slice(0, 7);
+  document.getElementById('cc-upload-preview').style.display = 'none';
+  document.getElementById('cc-upload-confirm').disabled = true;
+  document.getElementById('cc-file-input').value = '';
+  pendingCCTransactions = [];
+  openModal('modal-upload-cc');
+}
+
+function handleCCFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rows = parseCSV(e.target.result);
+    pendingCCTransactions = rows.map(row => ({
+      id: genId(),
+      cardId: document.getElementById('upload-cc-card-id').value,
+      month: document.getElementById('upload-cc-month').value,
+      date: normalizeDate(row.date),
+      description: row.description,
+      amount: Math.abs(parseFloat(row.amount)) || 0,
+      category: autoCategorize(row.description)
+    })).filter(t => t.amount > 0);
+
+    if (pendingCCTransactions.length === 0) {
+      document.getElementById('cc-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found. Ensure CSV has Date, Description, and Amount columns.</p>';
+      document.getElementById('cc-upload-preview').style.display = 'block';
+      return;
+    }
+
+    let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingCCTransactions.length + '</strong> transactions found:</p>';
+    html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th></tr>';
+    pendingCCTransactions.slice(0, 20).forEach(t => {
+      html += `<tr><td>${t.date}</td><td>${t.description}</td><td>$${t.amount.toFixed(2)}</td><td><span class="badge badge-${t.category.toLowerCase().replace(/\s/g,'')}">${t.category}</span></td></tr>`;
+    });
+    if (pendingCCTransactions.length > 20) html += `<tr><td colspan="4" class="text-muted">...and ${pendingCCTransactions.length - 20} more</td></tr>`;
+    html += '</table></div>';
+    document.getElementById('cc-upload-preview').innerHTML = html;
+    document.getElementById('cc-upload-preview').style.display = 'block';
+    document.getElementById('cc-upload-confirm').disabled = false;
+  };
+  reader.readAsText(file);
+}
+
+function confirmCCUpload() {
+  ccTransactions = ccTransactions.concat(pendingCCTransactions);
+  persistCCTxn();
+  pendingCCTransactions = [];
+  closeModal('modal-upload-cc');
+  refreshCCPage();
+}
+
+// ════════════════════════════════════════════════════════════════
+// CSV PARSING & CATEGORIZATION
+// ════════════════════════════════════════════════════════════════
+
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+
+  // Parse header
+  const headerLine = lines[0];
+  const headers = splitCSVLine(headerLine).map(h => h.toLowerCase().trim());
+
+  // Find columns
+  const dateIdx = headers.findIndex(h => h.includes('date'));
+  const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('merchant') || h.includes('name') || h.includes('memo') || h.includes('payee') || h.includes('transaction'));
+  const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('amt') || h.includes('debit') || h.includes('charge'));
+
+  // Fallback: if no headers detected, assume order: date, description, amount
+  const useFallback = dateIdx === -1 && descIdx === -1 && amtIdx === -1;
+
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 3) continue;
+    let date, description, amount;
+    if (useFallback) {
+      date = cols[0]; description = cols[1]; amount = cols[2];
+    } else {
+      date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
+      description = descIdx >= 0 ? cols[descIdx] : cols[1];
+      amount = amtIdx >= 0 ? cols[amtIdx] : cols[2];
+    }
+    if (date && description) {
+      results.push({ date: date.trim(), description: description.trim(), amount: amount ? amount.trim().replace(/[$,]/g, '') : '0' });
+    }
+  }
+  return results;
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; }
+    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current);
+  return result;
+}
+
+function normalizeDate(dateStr) {
+  // Try to parse various date formats into YYYY-MM-DD
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  // Try DD/MM/YYYY or MM/DD/YYYY
+  const parts = dateStr.split(/[\/\-\.]/);
+  if (parts.length === 3) {
+    if (parts[2].length === 4) {
+      // DD/MM/YYYY or MM/DD/YYYY
+      const m = parseInt(parts[0]), d2 = parseInt(parts[1]), y = parseInt(parts[2]);
+      if (m > 12) return `${y}-${String(d2).padStart(2,'0')}-${String(m).padStart(2,'0')}`;
+      return `${y}-${String(m).padStart(2,'0')}-${String(d2).padStart(2,'0')}`;
+    }
+  }
+  return dateStr;
+}
+
+const CATEGORY_KEYWORDS = {
+  'Eating Out': ['restaurant','cafe','coffee','starbucks','tim horton','mcdonald','subway','pizza','sushi','uber eats','doordash','skip the dishes','grubhub','wendy','burger','taco','diner','bistro','grill','pho','ramen','chipotle','panera','noodle','thai','indian','chinese food','kfc','popeye','a&w','dairy queen','harvey','swiss chalet','boston pizza','earls','cactus club','joey','milestones','the keg','montanas','east side','jack astor','red lobster','olive garden','domino','papa john','little caesar','mary brown'],
+  'Groceries': ['grocery','supermarket','walmart','costco','loblaws','metro','sobeys','no frills','freshco','food basics','whole foods','safeway','save-on','independent','farm boy','longos','fortinos','zehrs','superstore','real canadian','t&t','shoppers drug mart','dollarama','bulk barn','market'],
+  'Travel': ['airline','air canada','westjet','hotel','airbnb','booking.com','expedia','flight','marriott','hilton','hyatt','travel','amtrak','via rail','porter','flair','swoop','delta','united','american air','british air','lufthansa','uber','lyft','taxi','cab','rental car','enterprise','hertz','avis','budget car','national car','airport'],
+  'Gas': ['gas','fuel','petro','shell','esso','petrocan','pioneer','ultramar','canadian tire gas','husky','mobil','chevron','sunoco','co-op gas','circle k','7-eleven fuel','pioneer gas'],
+  'Shopping': ['amazon','ebay','apple','microsoft','best buy','walmart','ikea','the bay','hudson','winners','homesense','marshalls','canadian tire','home depot','home hardware','rona','lowes','staples','indigo','chapters','sport chek','marks','atmosphere','old navy','gap','h&m','zara','roots','aritzia','lululemon','sephora','bath & body','nordstrom','simons','la maison','pottery barn','crate','west elm','wayfair','etsy'],
+  'Entertainment': ['netflix','spotify','disney','hbo','prime video','apple tv','cinema','theatre','movie','concert','ticket','ticketmaster','steam','playstation','xbox','nintendo','game','amusement','museum','zoo','aquarium','bowling','golf','ski','crave','paramount','peacock','funimation','crunchyroll','twitch','youtube premium'],
+  'Subscriptions': ['subscription','membership','monthly','annual fee','premium','icloud','google storage','dropbox','adobe','microsoft 365','office 365','linkedin','medium','patreon','substack','notion','slack','zoom','vpn','nordvpn','express vpn','antivirus','norton','mcafee','gym','fitness','planet fitness','goodlife','anytime fitness','ymca','ywca'],
+  'Health': ['pharmacy','drug','medical','dental','doctor','clinic','hospital','optom','vision','prescription','health','wellness','vitamin','supplement','physio','chiropract','massage','psych','therap','lab','blood','x-ray','imaging','insurance','manulife','sun life','green shield','blue cross','great-west']
+};
+
+function autoCategorize(description) {
+  const lower = description.toLowerCase();
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (lower.includes(kw)) return category;
+    }
+  }
+  return 'Other';
+}
+
+// ════════════════════════════════════════════════════════════════
+// CREDIT CARDS — RENDERING
+// ════════════════════════════════════════════════════════════════
+
+function refreshCCPage() {
+  renderCCCards();
+  populateMonthSelectors();
+  renderCCSummary();
+  renderPerCard();
+  renderCCTransactions();
+}
+
+function renderCCCards() {
+  const grid = document.getElementById('cc-cards-grid');
+  if (creditCards.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128179;</div><p>No credit cards added yet. Click "Add Card" to get started.</p></div>';
+    return;
+  }
+  const today = new Date();
+  grid.innerHTML = creditCards.map(card => {
+    const due = new Date(card.dueDate + 'T00:00:00');
+    const diff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    const dueSoon = diff <= 7 && diff >= 0;
+    const overdue = diff < 0;
+    const dueClass = overdue || dueSoon ? 'due-soon' : 'due-ok';
+    const dueText = overdue ? `<span class="text-danger">${Math.abs(diff)} days overdue</span>` : dueSoon ? `<span class="text-danger">${diff} days left</span>` : `${diff} days left`;
+    const typeClass = 'card-type-' + card.type.toLowerCase();
+    return `
+      <div class="stat-card ${dueClass}">
+        <div class="flex-between">
+          <div class="label">${card.name}</div>
+          <span class="card-type-icon ${typeClass}">${card.type}</span>
+        </div>
+        <div class="value">$${card.balance.toFixed(2)}</div>
+        <div class="sub">Due: ${card.dueDate} &middot; ${dueText}</div>
+        <div class="sub text-muted">${card.rewards === 'travel' ? 'Travel Rewards' : 'Cash Back'}</div>
+        <div class="mt-2" style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-primary" onclick="openUploadCCModal('${card.id}')">Upload CSV</button>
+          <button class="btn btn-sm btn-secondary" onclick="openEditCardModal('${card.id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteCard('${card.id}')">Delete</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function getAvailableMonths(transactions) {
+  const months = new Set();
+  transactions.forEach(t => {
+    if (t.month) months.add(t.month);
+    else if (t.date) months.add(t.date.slice(0, 7));
+  });
+  return Array.from(months).sort().reverse();
+}
+
+function populateMonthSelectors() {
+  const ccMonths = getAvailableMonths(ccTransactions);
+  const baMonths = getAvailableMonths(baTransactions);
+  const allCCMonths = ccMonths.length ? ccMonths : [new Date().toISOString().slice(0, 7)];
+  const allBAMonths = baMonths.length ? baMonths : [new Date().toISOString().slice(0, 7)];
+
+  const ccOpts = allCCMonths.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+  document.getElementById('cc-month-select').innerHTML = ccOpts;
+  document.getElementById('cc-percard-month').innerHTML = ccOpts;
+  document.getElementById('cc-txn-month-filter').innerHTML = '<option value="all">All Months</option>' + ccOpts;
+
+  const baOpts = allBAMonths.map(m => `<option value="${m}">${formatMonth(m)}</option>`).join('');
+  document.getElementById('ba-month-select').innerHTML = baOpts;
+  document.getElementById('ba-txn-month-filter').innerHTML = '<option value="all">All Months</option>' + baOpts;
+
+  // Card filter for transactions
+  const cardFilterOpts = '<option value="all">All Cards</option>' + creditCards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('cc-txn-card-filter').innerHTML = cardFilterOpts;
+
+  // Account filter
+  const acctFilterOpts = '<option value="all">All Accounts</option>' + bankAccounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+  document.getElementById('ba-txn-acct-filter').innerHTML = acctFilterOpts;
+  document.getElementById('ba-trend-account').innerHTML = acctFilterOpts;
+}
+
+function formatMonth(m) {
+  const [y, mo] = m.split('-');
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return names[parseInt(mo) - 1] + ' ' + y;
+}
+
+const CATEGORY_COLORS = {
+  'Eating Out': '#f59e0b', 'Groceries': '#22c55e', 'Travel': '#3b82f6',
+  'Gas': '#6366f1', 'Shopping': '#ec4899', 'Entertainment': '#8b5cf6',
+  'Subscriptions': '#06b6d4', 'Health': '#ef4444', 'Other': '#94a3b8'
+};
+const ALL_CATEGORIES = Object.keys(CATEGORY_COLORS);
+
+function renderCCSummary() {
+  const month = document.getElementById('cc-month-select').value;
+  const txns = ccTransactions.filter(t => (t.month || t.date.slice(0, 7)) === month);
+
+  if (txns.length === 0) {
+    document.getElementById('cc-category-bars').innerHTML = '';
+    document.getElementById('cc-category-empty').style.display = 'block';
+    return;
+  }
+  document.getElementById('cc-category-empty').style.display = 'none';
+
+  const totals = {};
+  ALL_CATEGORIES.forEach(c => totals[c] = 0);
+  txns.forEach(t => { totals[t.category] = (totals[t.category] || 0) + t.amount; });
+
+  const maxVal = Math.max(...Object.values(totals), 1);
+  const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
+
+  let html = `<div style="font-size:.875rem;margin-bottom:16px;">Total spending: <strong>$${grandTotal.toFixed(2)} CAD</strong></div>`;
+  ALL_CATEGORIES.forEach(cat => {
+    if (totals[cat] === 0) return;
+    const pct = (totals[cat] / maxVal) * 100;
+    html += `<div class="cat-bar">
+      <div class="cat-label"><span>${cat}</span><span>$${totals[cat].toFixed(2)}</span></div>
+      <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
+    </div>`;
+  });
+
+  document.getElementById('cc-category-bars').innerHTML = html;
+}
+
+function renderPerCard() {
+  const month = document.getElementById('cc-percard-month').value;
+  const container = document.getElementById('cc-percard-content');
+
+  if (creditCards.length === 0) {
+    container.innerHTML = '<p class="text-muted">No cards added yet.</p>';
+    return;
+  }
+
+  let html = '';
+  creditCards.forEach(card => {
+    const txns = ccTransactions.filter(t => t.cardId === card.id && (t.month || t.date.slice(0, 7)) === month);
+    const totals = {};
+    ALL_CATEGORIES.forEach(c => totals[c] = 0);
+    txns.forEach(t => { totals[t.category] = (totals[t.category] || 0) + t.amount; });
+    const total = Object.values(totals).reduce((a, b) => a + b, 0);
+    const maxVal = Math.max(...Object.values(totals), 1);
+
+    html += `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
+      <div class="flex-between" style="margin-bottom:12px;">
+        <strong>${card.name}</strong>
+        <span>$${total.toFixed(2)} total</span>
+      </div>`;
+    if (txns.length === 0) {
+      html += '<p class="text-muted" style="font-size:.875rem;">No transactions for this month.</p>';
+    } else {
+      ALL_CATEGORIES.forEach(cat => {
+        if (totals[cat] === 0) return;
+        const pct = (totals[cat] / maxVal) * 100;
+        html += `<div class="cat-bar">
+          <div class="cat-label"><span>${cat}</span><span>$${totals[cat].toFixed(2)}</span></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
+        </div>`;
+      });
+    }
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function renderCCTransactions() {
+  const cardFilter = document.getElementById('cc-txn-card-filter').value;
+  const monthFilter = document.getElementById('cc-txn-month-filter').value;
+
+  let txns = [...ccTransactions];
+  if (cardFilter !== 'all') txns = txns.filter(t => t.cardId === cardFilter);
+  if (monthFilter !== 'all') txns = txns.filter(t => (t.month || t.date.slice(0, 7)) === monthFilter);
+
+  txns.sort((a, b) => b.date.localeCompare(a.date));
+
+  const container = document.getElementById('cc-transactions-table');
+  if (txns.length === 0) {
+    container.innerHTML = '<p class="text-muted" style="padding:20px;text-align:center;">No transactions found.</p>';
+    return;
+  }
+
+  let html = '<div style="max-height:500px;overflow-y:auto;"><table><tr><th>Date</th><th>Card</th><th>Description</th><th>Amount</th><th>Category</th><th></th></tr>';
+  txns.forEach(t => {
+    const card = creditCards.find(c => c.id === t.cardId);
+    const badgeClass = 'badge-' + t.category.toLowerCase().replace(/\s/g, '');
+    html += `<tr>
+      <td>${t.date}</td>
+      <td>${card ? card.name : 'Unknown'}</td>
+      <td>${t.description}</td>
+      <td>$${t.amount.toFixed(2)}</td>
+      <td><span class="badge ${badgeClass}">${t.category}</span></td>
+      <td><button class="btn btn-sm btn-secondary" onclick="openRecategorize('${t.id}','cc')">Re-cat</button></td>
+    </tr>`;
+  });
+  html += '</table></div>';
+  container.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════════
+// RE-CATEGORIZE
+// ════════════════════════════════════════════════════════════════
+
+function openRecategorize(txnId, source) {
+  const txns = source === 'cc' ? ccTransactions : baTransactions;
+  const txn = txns.find(t => t.id === txnId);
+  if (!txn) return;
+  document.getElementById('recat-txn-id').value = txnId;
+  document.getElementById('recat-source').value = source;
+  document.getElementById('recat-description').textContent = txn.description + ' — $' + txn.amount.toFixed(2);
+  document.getElementById('recat-category').value = txn.category;
+  openModal('modal-recategorize');
+}
+
+function saveRecategorize() {
+  const txnId = document.getElementById('recat-txn-id').value;
+  const source = document.getElementById('recat-source').value;
+  const newCat = document.getElementById('recat-category').value;
+
+  if (source === 'cc') {
+    const txn = ccTransactions.find(t => t.id === txnId);
+    if (txn) { txn.category = newCat; persistCCTxn(); }
+    refreshCCPage();
+  } else {
+    const txn = baTransactions.find(t => t.id === txnId);
+    if (txn) { txn.category = newCat; persistBATxn(); }
+    refreshBankPage();
+  }
+  closeModal('modal-recategorize');
+}
+
+// ════════════════════════════════════════════════════════════════
+// BANK ACCOUNTS — CRUD
+// ════════════════════════════════════════════════════════════════
+
+function openAddBankModal() {
+  document.getElementById('bank-modal-title').textContent = 'Add Bank Account';
+  document.getElementById('edit-bank-id').value = '';
+  document.getElementById('bank-name').value = '';
+  document.getElementById('bank-type').value = 'chequing';
+  document.getElementById('bank-balance').value = '';
+  openModal('modal-add-bank');
+}
+
+function openEditBankModal(id) {
+  const acct = bankAccounts.find(a => a.id === id);
+  if (!acct) return;
+  document.getElementById('bank-modal-title').textContent = 'Edit Bank Account';
+  document.getElementById('edit-bank-id').value = id;
+  document.getElementById('bank-name').value = acct.name;
+  document.getElementById('bank-type').value = acct.type;
+  document.getElementById('bank-balance').value = acct.balance;
+  openModal('modal-add-bank');
+}
+
+function saveBank() {
+  const editId = document.getElementById('edit-bank-id').value;
+  const name = document.getElementById('bank-name').value.trim();
+  const type = document.getElementById('bank-type').value;
+  const balance = parseFloat(document.getElementById('bank-balance').value) || 0;
+  if (!name) return alert('Please enter an account name.');
+
+  if (editId) {
+    const acct = bankAccounts.find(a => a.id === editId);
+    Object.assign(acct, { name, type, balance });
+  } else {
+    bankAccounts.push({ id: genId(), name, type, balance });
+  }
+  persistBA();
+  closeModal('modal-add-bank');
+  refreshBankPage();
+}
+
+function deleteBank(id) {
+  if (!confirm('Delete this account and all its transactions?')) return;
+  bankAccounts = bankAccounts.filter(a => a.id !== id);
+  baTransactions = baTransactions.filter(t => t.accountId !== id);
+  persistBA(); persistBATxn();
+  refreshBankPage();
+}
+
+// ════════════════════════════════════════════════════════════════
+// BANK ACCOUNTS — CSV UPLOAD
+// ════════════════════════════════════════════════════════════════
+
+let pendingBATransactions = [];
+
+function openUploadBAModal(acctId) {
+  const acct = bankAccounts.find(a => a.id === acctId);
+  document.getElementById('upload-ba-acct-id').value = acctId;
+  document.getElementById('upload-ba-acct-name').textContent = acct.name;
+  document.getElementById('upload-ba-month').value = new Date().toISOString().slice(0, 7);
+  document.getElementById('ba-upload-preview').style.display = 'none';
+  document.getElementById('ba-upload-confirm').disabled = true;
+  document.getElementById('ba-file-input').value = '';
+  pendingBATransactions = [];
+  openModal('modal-upload-ba');
+}
+
+function handleBAFileSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rows = parseCSV(e.target.result);
+    pendingBATransactions = rows.map(row => {
+      const amount = parseFloat(row.amount) || 0;
+      return {
+        id: genId(),
+        accountId: document.getElementById('upload-ba-acct-id').value,
+        month: document.getElementById('upload-ba-month').value,
+        date: normalizeDate(row.date),
+        description: row.description,
+        amount: Math.abs(amount),
+        direction: amount >= 0 ? 'in' : 'out',
+        category: categorizeBankTxn(row.description, amount)
+      };
+    }).filter(t => t.amount > 0);
+
+    if (pendingBATransactions.length === 0) {
+      document.getElementById('ba-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found.</p>';
+      document.getElementById('ba-upload-preview').style.display = 'block';
+      return;
+    }
+
+    let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingBATransactions.length + '</strong> transactions found:</p>';
+    html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Type</th></tr>';
+    pendingBATransactions.slice(0, 20).forEach(t => {
+      const cls = t.direction === 'in' ? 'badge-income' : 'badge-expense';
+      html += `<tr><td>${t.date}</td><td>${t.description}</td><td>$${t.amount.toFixed(2)}</td><td><span class="badge ${cls}">${t.direction === 'in' ? 'Income' : 'Expense'}</span></td></tr>`;
+    });
+    if (pendingBATransactions.length > 20) html += `<tr><td colspan="4" class="text-muted">...and ${pendingBATransactions.length - 20} more</td></tr>`;
+    html += '</table></div>';
+    document.getElementById('ba-upload-preview').innerHTML = html;
+    document.getElementById('ba-upload-preview').style.display = 'block';
+    document.getElementById('ba-upload-confirm').disabled = false;
+  };
+  reader.readAsText(file);
+}
+
+function confirmBAUpload() {
+  baTransactions = baTransactions.concat(pendingBATransactions);
+  persistBATxn();
+  pendingBATransactions = [];
+  closeModal('modal-upload-ba');
+  refreshBankPage();
+}
+
+function categorizeBankTxn(description, amount) {
+  const lower = description.toLowerCase();
+  if (amount >= 0) {
+    if (lower.includes('salary') || lower.includes('payroll') || lower.includes('deposit') || lower.includes('income') || lower.includes('pay')) return 'Income';
+    if (lower.includes('transfer') || lower.includes('e-transfer') || lower.includes('etransfer')) return 'Transfer In';
+    if (lower.includes('refund') || lower.includes('rebate') || lower.includes('cashback')) return 'Refund';
+    return 'Income';
+  } else {
+    if (lower.includes('transfer') || lower.includes('e-transfer') || lower.includes('etransfer')) return 'Transfer Out';
+    if (lower.includes('withdraw') || lower.includes('atm')) return 'Withdrawal';
+    if (lower.includes('bill') || lower.includes('hydro') || lower.includes('utility') || lower.includes('insurance') || lower.includes('mortgage') || lower.includes('rent') || lower.includes('phone') || lower.includes('internet') || lower.includes('rogers') || lower.includes('bell') || lower.includes('telus') || lower.includes('fido') || lower.includes('koodo') || lower.includes('virgin') || lower.includes('freedom')) return 'Bill';
+    return 'Expense';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// BANK ACCOUNTS — RENDERING
+// ════════════════════════════════════════════════════════════════
+
+function refreshBankPage() {
+  renderBACards();
+  populateMonthSelectors();
+  renderBASummary();
+  renderBATrend();
+  renderBATransactions();
+}
+
+function renderBACards() {
+  const grid = document.getElementById('ba-cards-grid');
+  if (bankAccounts.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-icon">&#127974;</div><p>No bank accounts added yet. Click "Add Account" to get started.</p></div>';
+    return;
+  }
+  grid.innerHTML = bankAccounts.map(acct => `
+    <div class="stat-card due-ok">
+      <div class="label">${acct.name} <span class="text-muted">(${acct.type})</span></div>
+      <div class="value">$${acct.balance.toFixed(2)}</div>
+      <div class="mt-2" style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-sm btn-primary" onclick="openUploadBAModal('${acct.id}')">Upload CSV</button>
+        <button class="btn btn-sm btn-secondary" onclick="openEditBankModal('${acct.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteBank('${acct.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderBASummary() {
+  const month = document.getElementById('ba-month-select').value;
+  const container = document.getElementById('ba-summary-content');
+  const emptyEl = document.getElementById('ba-summary-empty');
+
+  const txns = baTransactions.filter(t => (t.month || t.date.slice(0, 7)) === month);
+  if (txns.length === 0) {
+    container.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  // Group by account
+  let html = '';
+  const accounts = bankAccounts.length > 0 ? bankAccounts : [{ id: 'unknown', name: 'Unknown Account' }];
+
+  accounts.forEach(acct => {
+    const acctTxns = txns.filter(t => t.accountId === acct.id);
+    if (acctTxns.length === 0) return;
+
+    const moneyIn = acctTxns.filter(t => t.direction === 'in').reduce((s, t) => s + t.amount, 0);
+    const moneyOut = acctTxns.filter(t => t.direction === 'out').reduce((s, t) => s + t.amount, 0);
+    const net = moneyIn - moneyOut;
+
+    // Group by category
+    const inCats = {}, outCats = {};
+    acctTxns.forEach(t => {
+      if (t.direction === 'in') inCats[t.category] = (inCats[t.category] || 0) + t.amount;
+      else outCats[t.category] = (outCats[t.category] || 0) + t.amount;
+    });
+
+    html += `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:1rem;margin-bottom:12px;">${acct.name}</h3>
+      <div class="grid grid-3" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="label">Money In</div><div class="value text-success">$${moneyIn.toFixed(2)}</div></div>
+        <div class="stat-card"><div class="label">Money Out</div><div class="value text-danger">$${moneyOut.toFixed(2)}</div></div>
+        <div class="stat-card"><div class="label">Net</div><div class="value ${net >= 0 ? 'text-success' : 'text-danger'}">$${net.toFixed(2)}</div></div>
+      </div>
+      <div style="display:flex;gap:32px;">
+        <div style="flex:1;">
+          <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">INCOMING</h4>
+          ${Object.entries(inCats).map(([cat, amt]) => `<div style="display:flex;justify-content:space-between;font-size:.875rem;padding:4px 0;"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>`).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
+        </div>
+        <div style="flex:1;">
+          <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">OUTGOING</h4>
+          ${Object.entries(outCats).map(([cat, amt]) => `<div style="display:flex;justify-content:space-between;font-size:.875rem;padding:4px 0;"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>`).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderBATransactions() {
+  const acctFilter = document.getElementById('ba-txn-acct-filter').value;
+  const monthFilter = document.getElementById('ba-txn-month-filter').value;
+
+  let txns = [...baTransactions];
+  if (acctFilter !== 'all') txns = txns.filter(t => t.accountId === acctFilter);
+  if (monthFilter !== 'all') txns = txns.filter(t => (t.month || t.date.slice(0, 7)) === monthFilter);
+
+  txns.sort((a, b) => b.date.localeCompare(a.date));
+
+  const container = document.getElementById('ba-transactions-table');
+  if (txns.length === 0) {
+    container.innerHTML = '<p class="text-muted" style="padding:20px;text-align:center;">No transactions found.</p>';
+    return;
+  }
+
+  let html = '<div style="max-height:500px;overflow-y:auto;"><table><tr><th>Date</th><th>Account</th><th>Description</th><th>Amount</th><th>Type</th></tr>';
+  txns.forEach(t => {
+    const acct = bankAccounts.find(a => a.id === t.accountId);
+    const cls = t.direction === 'in' ? 'badge-income' : 'badge-expense';
+    const sign = t.direction === 'in' ? '+' : '-';
+    html += `<tr>
+      <td>${t.date}</td>
+      <td>${acct ? acct.name : 'Unknown'}</td>
+      <td>${t.description}</td>
+      <td class="${t.direction === 'in' ? 'text-success' : 'text-danger'}">${sign}$${t.amount.toFixed(2)}</td>
+      <td><span class="badge ${cls}">${t.category || (t.direction === 'in' ? 'Income' : 'Expense')}</span></td>
+    </tr>`;
+  });
+  html += '</table></div>';
+  container.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════════
+// BALANCE TREND CHART (Simple Canvas)
+// ════════════════════════════════════════════════════════════════
+
+function renderBATrend() {
+  const canvas = document.getElementById('ba-trend-chart');
+  const ctx = canvas.getContext('2d');
+  const acctFilter = document.getElementById('ba-trend-account').value;
+
+  // Get monthly totals
+  let txns = [...baTransactions];
+  if (acctFilter !== 'all') txns = txns.filter(t => t.accountId === acctFilter);
+
+  const monthlyNet = {};
+  txns.forEach(t => {
+    const m = t.month || t.date.slice(0, 7);
+    if (!monthlyNet[m]) monthlyNet[m] = 0;
+    monthlyNet[m] += t.direction === 'in' ? t.amount : -t.amount;
+  });
+
+  const months = Object.keys(monthlyNet).sort();
+  if (months.length === 0) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data available. Upload bank statements to see trends.', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  // Build cumulative balance starting from account balance
+  let startBalance = 0;
+  if (acctFilter !== 'all') {
+    const acct = bankAccounts.find(a => a.id === acctFilter);
+    if (acct) startBalance = acct.balance;
+  } else {
+    startBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  }
+
+  // Work backwards from current balance to get historical
+  const totalNet = months.reduce((s, m) => s + monthlyNet[m], 0);
+  let runningBalance = startBalance - totalNet;
+  const balances = months.map(m => {
+    runningBalance += monthlyNet[m];
+    return runningBalance;
+  });
+
+  // Draw chart
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const W = rect.width, H = rect.height;
+  const pad = { top: 20, right: 20, bottom: 40, left: 70 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const minVal = Math.min(...balances) * 0.95;
+  const maxVal = Math.max(...balances) * 1.05 || 1;
+  const range = maxVal - minVal || 1;
+
+  const getX = i => pad.left + (i / (months.length - 1 || 1)) * chartW;
+  const getY = v => pad.top + chartH - ((v - minVal) / range) * chartH;
+
+  // Grid lines
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (i / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = maxVal - (i / 4) * range;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
+  }
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  balances.forEach((b, i) => {
+    const x = getX(i), y = getY(b);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Fill area
+  ctx.lineTo(getX(balances.length - 1), pad.top + chartH);
+  ctx.lineTo(getX(0), pad.top + chartH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(59,130,246,.1)';
+  ctx.fill();
+
+  // Dots
+  balances.forEach((b, i) => {
+    ctx.beginPath();
+    ctx.arc(getX(i), getY(b), 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#3b82f6';
+    ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  });
+
+  // X labels
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  months.forEach((m, i) => {
+    ctx.fillText(formatMonth(m), getX(i), H - pad.bottom + 20);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+
+refreshCCPage();
+refreshBankPage();
+
+// Redraw chart on resize
+window.addEventListener('resize', () => { renderBATrend(); });
+</script>
+
+</body>
+</html>
