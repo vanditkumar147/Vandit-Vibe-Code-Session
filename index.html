@@ -3085,8 +3085,11 @@ function parseInvCSV(text) {
     if (!price && parsed.price) price = parsed.price;
 
     // Derive price from amount and quantity if still missing
-    if (!price && quantity > 0 && rawAmount > 0) {
-      price = rawAmount / quantity;
+    if (!price && quantity > 0 && Math.abs(rawAmount) > 0) {
+      price = Math.abs(rawAmount) / quantity;
+    }
+    if (!quantity && price > 0 && Math.abs(rawAmount) > 0) {
+      quantity = Math.abs(rawAmount) / price;
     }
 
     // Store parsed name for this ticker
@@ -3103,6 +3106,31 @@ function parseInvCSV(text) {
       amount: Math.abs(rawAmount)
     });
   }
+  // Post-process: link NRT/tax entries to their corresponding dividend symbol
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].type === 'tax' && !results[i].symbol) {
+      // Look for nearest dividend on the same date
+      const taxDate = results[i].date;
+      for (let j = i - 1; j >= 0; j--) {
+        if (results[j].date === taxDate && results[j].type === 'dividend' && results[j].symbol) {
+          results[i].symbol = results[j].symbol;
+          results[i].name = results[j].name;
+          break;
+        }
+      }
+      // Also look forward
+      if (!results[i].symbol) {
+        for (let j = i + 1; j < results.length; j++) {
+          if (results[j].date === taxDate && results[j].type === 'dividend' && results[j].symbol) {
+            results[i].symbol = results[j].symbol;
+            results[i].name = results[j].name;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   return results;
 }
 
@@ -3115,6 +3143,7 @@ function categorizeInvTxnType(type) {
   if (upper === 'CONT') return 'deposit';
   if (upper === 'WD') return 'withdrawal';
   if (upper === 'EFT') return 'deposit';
+  if (upper === 'NRT') return 'tax';
   // Longer names
   const lower = type.toLowerCase();
   if (lower.includes('buy') || lower.includes('purchase') || lower.includes('bought')) return 'buy';
@@ -3214,7 +3243,7 @@ function autoUpdateHoldings(acctId) {
     .filter(t => t.accountId === acctId && t.symbol)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const symbols = [...new Set(acctTxns.filter(t => t.type === 'buy' || t.type === 'sell').map(t => t.symbol))];
+  const symbols = [...new Set(acctTxns.filter(t => ['buy', 'sell', 'dividend', 'tax'].includes(t.type)).map(t => t.symbol).filter(Boolean))];
 
   symbols.forEach(symbol => {
     const txns = acctTxns.filter(t => t.symbol === symbol);
@@ -3239,6 +3268,8 @@ function autoUpdateHoldings(acctId) {
         }
       } else if (t.type === 'dividend') {
         totalDividends += t.amount;
+      } else if (t.type === 'tax') {
+        totalDividends -= t.amount; // NRT withholding tax reduces dividend income
       }
     });
 
@@ -3272,7 +3303,7 @@ function autoUpdateHoldings(acctId) {
 
 const INV_TYPE_COLORS = {
   'buy': '#2563eb', 'sell': '#ef4444', 'dividend': '#22c55e',
-  'deposit': '#8b5cf6', 'withdrawal': '#f59e0b', 'fee': '#64748b', 'other': '#94a3b8'
+  'deposit': '#8b5cf6', 'withdrawal': '#f59e0b', 'fee': '#64748b', 'tax': '#dc2626', 'other': '#94a3b8'
 };
 
 // ════════════════════════════════════════════════════════════════
