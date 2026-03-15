@@ -1041,8 +1041,7 @@ function renderCCCards() {
 function getAvailableMonths(transactions) {
   const months = new Set();
   transactions.forEach(t => {
-    if (t.month) months.add(t.month);
-    else if (t.date) months.add(t.date.slice(0, 7));
+    if (t.date) months.add(t.date.slice(0, 7));
   });
   return Array.from(months).sort().reverse();
 }
@@ -1088,7 +1087,7 @@ const ALL_CATEGORIES = Object.keys(CATEGORY_COLORS);
 
 function renderCCSummary() {
   const month = document.getElementById('cc-month-select').value;
-  const txns = ccTransactions.filter(t => (t.month || t.date.slice(0, 7)) === month);
+  const txns = ccTransactions.filter(t => t.date.slice(0, 7) === month);
 
   if (txns.length === 0) {
     document.getElementById('cc-category-bars').innerHTML = '';
@@ -1159,7 +1158,7 @@ function drillDownCategory(category, containerId, cardId, sortField) {
 
   const monthEl = document.getElementById(cardId ? 'cc-percard-month' : 'cc-month-select');
   const month = monthEl.value;
-  let txns = ccTransactions.filter(t => t.category === category && (t.month || t.date.slice(0, 7)) === month);
+  let txns = ccTransactions.filter(t => t.category === category && t.date.slice(0, 7) === month);
   if (cardId) txns = txns.filter(t => t.cardId === cardId);
 
   if (txns.length === 0) {
@@ -1227,7 +1226,7 @@ function renderPerCard() {
 
   let html = '';
   creditCards.forEach(card => {
-    const txns = ccTransactions.filter(t => t.cardId === card.id && (t.month || t.date.slice(0, 7)) === month);
+    const txns = ccTransactions.filter(t => t.cardId === card.id && t.date.slice(0, 7) === month);
     const totals = {};
     ALL_CATEGORIES.forEach(c => totals[c] = 0);
     txns.forEach(t => { totals[t.category] = (totals[t.category] || 0) + t.amount; });
@@ -1273,7 +1272,7 @@ function renderCCTransactions() {
 
   let txns = [...ccTransactions];
   if (cardFilter !== 'all') txns = txns.filter(t => t.cardId === cardFilter);
-  if (monthFilter !== 'all') txns = txns.filter(t => (t.month || t.date.slice(0, 7)) === monthFilter);
+  if (monthFilter !== 'all') txns = txns.filter(t => t.date.slice(0, 7) === monthFilter);
 
   txns.sort((a, b) => b.date.localeCompare(a.date));
 
@@ -1500,7 +1499,7 @@ function renderBASummary() {
   const container = document.getElementById('ba-summary-content');
   const emptyEl = document.getElementById('ba-summary-empty');
 
-  const txns = baTransactions.filter(t => (t.month || t.date.slice(0, 7)) === month);
+  const txns = baTransactions.filter(t => t.date.slice(0, 7) === month);
   if (txns.length === 0) {
     container.innerHTML = '';
     emptyEl.style.display = 'block';
@@ -1556,7 +1555,7 @@ function renderBATransactions() {
 
   let txns = [...baTransactions];
   if (acctFilter !== 'all') txns = txns.filter(t => t.accountId === acctFilter);
-  if (monthFilter !== 'all') txns = txns.filter(t => (t.month || t.date.slice(0, 7)) === monthFilter);
+  if (monthFilter !== 'all') txns = txns.filter(t => t.date.slice(0, 7) === monthFilter);
 
   txns.sort((a, b) => b.date.localeCompare(a.date));
 
@@ -1598,7 +1597,7 @@ function renderBATrend() {
 
   const monthlyNet = {};
   txns.forEach(t => {
-    const m = t.month || t.date.slice(0, 7);
+    const m = t.date.slice(0, 7);
     if (!monthlyNet[m]) monthlyNet[m] = 0;
     monthlyNet[m] += t.direction === 'in' ? t.amount : -t.amount;
   });
