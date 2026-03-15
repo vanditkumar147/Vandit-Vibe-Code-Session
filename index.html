@@ -257,6 +257,30 @@
   th.sortable::after { content: ' \2195'; font-size: .7rem; opacity: .4; }
   th.sortable.sort-asc::after { content: ' \2191'; opacity: 1; color: var(--accent); }
   th.sortable.sort-desc::after { content: ' \2193'; opacity: 1; color: var(--accent); }
+
+  .card-accordion {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 8px; overflow: hidden;
+  }
+  .card-accordion-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; cursor: pointer; background: #fff;
+    transition: background .15s; user-select: none;
+  }
+  .card-accordion-header:hover { background: #f8fafc; }
+  .card-accordion-header .card-acc-left { display: flex; align-items: center; gap: 12px; }
+  .card-accordion-header .card-acc-chevron {
+    transition: transform .2s; font-size: .75rem; color: var(--text-light);
+  }
+  .card-accordion-header.open .card-acc-chevron { transform: rotate(90deg); }
+  .card-accordion-body { padding: 0 18px 18px; display: none; }
+  .card-accordion-header.open + .card-accordion-body { display: block; }
+
+  .chart-legend {
+    display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: .75rem;
+  }
+  .chart-legend-item { display: flex; align-items: center; gap: 4px; }
+  .chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -321,6 +345,11 @@
           <p>No transactions yet. Upload a CSV statement to see spending data.</p>
         </div>
       </div>
+      <div class="panel">
+        <div class="panel-title">Monthly Spending Trend by Category</div>
+        <div class="chart-container"><canvas id="cc-combined-trend-chart"></canvas></div>
+        <div id="cc-combined-trend-legend" class="chart-legend"></div>
+      </div>
     </div>
 
     <!-- Per-card tab -->
@@ -334,6 +363,16 @@
           </div>
         </div>
         <div id="cc-percard-content"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">
+          <span>Monthly Spending Trend by Category</span>
+          <select id="cc-percard-trend-card" onchange="renderPerCardTrendChart()">
+            <option value="all">All Cards</option>
+          </select>
+        </div>
+        <div class="chart-container"><canvas id="cc-percard-trend-chart"></canvas></div>
+        <div id="cc-percard-trend-legend" class="chart-legend"></div>
       </div>
     </div>
 
@@ -350,6 +389,11 @@
           </div>
         </div>
         <div id="cc-transactions-table"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Monthly Spending Trend by Category</div>
+        <div class="chart-container"><canvas id="cc-txn-trend-chart"></canvas></div>
+        <div id="cc-txn-trend-legend" class="chart-legend"></div>
       </div>
     </div>
   </div>
@@ -1003,6 +1047,9 @@ function refreshCCPage() {
   renderCCSummary();
   renderPerCard();
   renderCCTransactions();
+  renderCombinedTrendChart();
+  renderPerCardTrendChart();
+  renderTxnTrendChart();
 }
 
 function renderCCCards() {
@@ -1069,6 +1116,10 @@ function populateMonthSelectors() {
   const acctFilterOpts = '<option value="all">All Accounts</option>' + bankAccounts.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
   document.getElementById('ba-txn-acct-filter').innerHTML = acctFilterOpts;
   document.getElementById('ba-trend-account').innerHTML = acctFilterOpts;
+
+  // Per-card trend card filter
+  const perCardTrendOpts = '<option value="all">All Cards</option>' + creditCards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  document.getElementById('cc-percard-trend-card').innerHTML = perCardTrendOpts;
 }
 
 function formatMonth(m) {
@@ -1215,6 +1266,13 @@ function drillDownCategory(category, containerId, cardId, sortField) {
   container.innerHTML = html;
 }
 
+let perCardExpanded = {};
+
+function togglePerCard(cardId) {
+  perCardExpanded[cardId] = !perCardExpanded[cardId];
+  renderPerCard();
+}
+
 function renderPerCard() {
   const month = document.getElementById('cc-percard-month').value;
   const container = document.getElementById('cc-percard-content');
@@ -1234,33 +1292,44 @@ function renderPerCard() {
     const spendingTotal = Object.entries(totals).filter(([k]) => k !== 'Refund').reduce((s, [, v]) => s + v, 0);
     const maxVal = Math.max(...Object.entries(totals).filter(([k]) => k !== 'Refund').map(([, v]) => v), 1);
     const drilldownId = 'percard-drilldown-' + card.id;
+    const isOpen = perCardExpanded[card.id];
+    const typeClass = 'card-type-' + card.type.toLowerCase();
 
-    html += `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
-      <div class="flex-between" style="margin-bottom:4px;">
-        <strong>${card.name}</strong>
-        <span>$${spendingTotal.toFixed(2)} total${refundTotal > 0 ? ' · <span class="text-success">-$' + refundTotal.toFixed(2) + ' refunds</span>' : ''}</span>
-      </div>`;
+    html += `<div class="card-accordion">
+      <div class="card-accordion-header ${isOpen ? 'open' : ''}" onclick="togglePerCard('${card.id}')">
+        <div class="card-acc-left">
+          <span class="card-acc-chevron">&#9654;</span>
+          <strong>${card.name}</strong>
+          <span class="card-type-icon ${typeClass}" style="font-size:.7rem;">${card.type}</span>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-weight:600;">$${spendingTotal.toFixed(2)}</span>
+          ${refundTotal > 0 ? '<span class="text-success" style="margin-left:8px;font-size:.813rem;">-$' + refundTotal.toFixed(2) + '</span>' : ''}
+          <span class="text-muted" style="margin-left:8px;font-size:.813rem;">${txns.length} txn${txns.length !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+      <div class="card-accordion-body" style="${isOpen ? 'display:block' : 'display:none'}">`;
     if (txns.length === 0) {
       html += '<p class="text-muted" style="font-size:.875rem;">No transactions for this month.</p>';
     } else {
-      html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:8px;">Click a category to see transactions</p>`;
+      html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:8px;margin-top:8px;">Click a category to see transactions</p>`;
       ALL_CATEGORIES.forEach(cat => {
         if (totals[cat] === 0 || cat === 'Refund') return;
         const pct = (totals[cat] / maxVal) * 100;
         const escapedCat = cat.replace(/'/g, "\\'");
-        html += `<div class="cat-bar" onclick="drillDownCategory('${escapedCat}','${drilldownId}','${card.id}')">
+        html += `<div class="cat-bar" onclick="event.stopPropagation();drillDownCategory('${escapedCat}','${drilldownId}','${card.id}')">
           <div class="cat-label"><span>${cat}</span><span>$${totals[cat].toFixed(2)}</span></div>
           <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
         </div>`;
       });
       if (refundTotal > 0) {
-        html += `<div class="cat-bar" onclick="drillDownCategory('Refund','${drilldownId}','${card.id}')" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px;">
+        html += `<div class="cat-bar" onclick="event.stopPropagation();drillDownCategory('Refund','${drilldownId}','${card.id}')" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px;">
           <div class="cat-label"><span style="color:var(--success);">Refunds</span><span class="text-success">-$${refundTotal.toFixed(2)}</span></div>
         </div>`;
       }
       html += `<div id="${drilldownId}"></div>`;
     }
-    html += '</div>';
+    html += '</div></div>';
   });
 
   container.innerHTML = html;
@@ -1297,6 +1366,129 @@ function renderCCTransactions() {
   });
   html += '</table></div>';
   container.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════════
+// CATEGORY TREND LINE CHARTS
+// ════════════════════════════════════════════════════════════════
+
+function getCategoryMonthlyData(txns) {
+  const months = new Set();
+  const catMonthTotals = {};
+  const spendingCats = ALL_CATEGORIES.filter(c => c !== 'Refund');
+
+  txns.forEach(t => {
+    if (t.category === 'Refund') return;
+    const m = t.date.slice(0, 7);
+    months.add(m);
+    if (!catMonthTotals[t.category]) catMonthTotals[t.category] = {};
+    catMonthTotals[t.category][m] = (catMonthTotals[t.category][m] || 0) + t.amount;
+  });
+
+  const sortedMonths = Array.from(months).sort();
+  // Only include categories that have data
+  const activeCats = spendingCats.filter(c => catMonthTotals[c] && Object.values(catMonthTotals[c]).some(v => v > 0));
+
+  return { months: sortedMonths, categories: activeCats, data: catMonthTotals };
+}
+
+function drawCategoryTrendChart(canvasId, legendId, txns) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const { months, categories, data } = getCategoryMonthlyData(txns);
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const pad = { top: 20, right: 20, bottom: 40, left: 70 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, W, H);
+
+  if (months.length === 0 || categories.length === 0) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('No data available. Upload statements to see trends.', W / 2, H / 2);
+    document.getElementById(legendId).innerHTML = '';
+    return;
+  }
+
+  // Find max value across all categories/months
+  let maxVal = 0;
+  categories.forEach(cat => {
+    months.forEach(m => {
+      const v = (data[cat] && data[cat][m]) || 0;
+      if (v > maxVal) maxVal = v;
+    });
+  });
+  maxVal = maxVal * 1.1 || 1;
+
+  const getX = i => pad.left + (i / (months.length - 1 || 1)) * chartW;
+  const getY = v => pad.top + chartH - (v / maxVal) * chartH;
+
+  // Grid lines
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (i / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = maxVal - (i / 4) * maxVal;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
+  }
+
+  // Draw lines for each category
+  categories.forEach(cat => {
+    const color = CATEGORY_COLORS[cat] || '#94a3b8';
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    months.forEach((m, i) => {
+      const v = (data[cat] && data[cat][m]) || 0;
+      const x = getX(i), y = getY(v);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Dots
+    months.forEach((m, i) => {
+      const v = (data[cat] && data[cat][m]) || 0;
+      if (v > 0) {
+        ctx.beginPath();
+        ctx.arc(getX(i), getY(v), 3, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    });
+  });
+
+  // X labels
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  months.forEach((m, i) => {
+    ctx.fillText(formatMonth(m), getX(i), H - pad.bottom + 20);
+  });
+
+  // Legend
+  const legendEl = document.getElementById(legendId);
+  legendEl.innerHTML = categories.map(cat =>
+    `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${CATEGORY_COLORS[cat]}"></div>${cat}</div>`
+  ).join('');
+}
+
+function renderCombinedTrendChart() {
+  drawCategoryTrendChart('cc-combined-trend-chart', 'cc-combined-trend-legend', ccTransactions);
+}
+
+function renderPerCardTrendChart() {
+  const cardFilter = document.getElementById('cc-percard-trend-card').value;
+  const txns = cardFilter === 'all' ? ccTransactions : ccTransactions.filter(t => t.cardId === cardFilter);
+  drawCategoryTrendChart('cc-percard-trend-chart', 'cc-percard-trend-legend', txns);
+}
+
+function renderTxnTrendChart() {
+  drawCategoryTrendChart('cc-txn-trend-chart', 'cc-txn-trend-legend', ccTransactions);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1825,7 +2017,12 @@ refreshBankPage();
 renderExportStats();
 
 // Redraw chart on resize
-window.addEventListener('resize', () => { renderBATrend(); });
+window.addEventListener('resize', () => {
+  renderBATrend();
+  renderCombinedTrendChart();
+  renderPerCardTrendChart();
+  renderTxnTrendChart();
+});
 </script>
 
 </body>
