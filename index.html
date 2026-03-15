@@ -7,16 +7,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root {
-    --bg: #f0f4f8;
-    --sidebar-bg: #1e3a5f;
-    --sidebar-hover: #2a4d72;
-    --sidebar-active: #3b82f6;
+    --bg: #f9f5f0;
+    --sidebar-bg: #1a1714;
+    --sidebar-hover: #2e2a26;
+    --sidebar-active: #d97706;
     --card-bg: #ffffff;
-    --text: #334155;
-    --text-light: #64748b;
-    --border: #e2e8f0;
-    --accent: #2563eb;
-    --accent-hover: #1d4ed8;
+    --text: #2c2520;
+    --text-light: #7c6f60;
+    --border: #e5ddd2;
+    --accent: #d97706;
+    --accent-hover: #b45309;
     --danger: #ef4444;
     --success: #22c55e;
     --warning: #f59e0b;
@@ -183,7 +183,7 @@
   .badge-withdrawal { background: #fce7f3; color: #9d174d; }
 
   .category-colors {
-    --eating: #f59e0b; --groceries: #22c55e; --travel: #3b82f6;
+    --eating: #f59e0b; --groceries: #22c55e; --travel: #d97706;
     --gas: #6366f1; --shopping: #ec4899; --entertainment: #8b5cf6;
     --subscriptions: #06b6d4; --health: #ef4444; --other: #94a3b8;
   }
@@ -1428,7 +1428,7 @@ function formatMonth(m) {
 }
 
 const CATEGORY_COLORS = {
-  'Eating Out': '#f59e0b', 'Groceries': '#22c55e', 'Travel': '#3b82f6',
+  'Eating Out': '#f59e0b', 'Groceries': '#22c55e', 'Travel': '#d97706',
   'Gas': '#6366f1', 'Shopping': '#ec4899', 'Entertainment': '#8b5cf6',
   'Subscriptions': '#06b6d4', 'Health': '#ef4444', 'Other': '#94a3b8',
   'Refund': '#22c55e'
@@ -2513,13 +2513,13 @@ function renderBATrend() {
 
   // Line
   ctx.beginPath();
-  ctx.strokeStyle = '#3b82f6';
+  ctx.strokeStyle = '#d97706';
   ctx.lineWidth = 2.5;
   ctx.lineJoin = 'round';
   balances.forEach((b, i) => {
     const x = getX(i), y = getY(b);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    chartDataPoints['ba-trend-chart'].push({ x, y, value: b, label: 'Balance', color: '#3b82f6', month: formatMonth(months[i]) });
+    chartDataPoints['ba-trend-chart'].push({ x, y, value: b, label: 'Balance', color: '#d97706', month: formatMonth(months[i]) });
   });
   ctx.stroke();
 
@@ -2534,7 +2534,7 @@ function renderBATrend() {
   balances.forEach((b, i) => {
     ctx.beginPath();
     ctx.arc(getX(i), getY(b), 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#3b82f6';
+    ctx.fillStyle = '#d97706';
     ctx.fill();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
   });
@@ -2553,8 +2553,8 @@ function renderBATrend() {
 // ════════════════════════════════════════════════════════════════
 
 const BA_CATEGORY_COLORS = {
-  'Income': '#22c55e', 'Transfer In': '#3b82f6', 'Refund': '#06b6d4', 'Interest': '#10b981',
-  'Eating Out': '#f59e0b', 'Groceries': '#22c55e', 'Travel': '#3b82f6', 'Gas': '#6366f1',
+  'Income': '#22c55e', 'Transfer In': '#d97706', 'Refund': '#06b6d4', 'Interest': '#10b981',
+  'Eating Out': '#f59e0b', 'Groceries': '#22c55e', 'Travel': '#d97706', 'Gas': '#6366f1',
   'Shopping': '#ec4899', 'Entertainment': '#8b5cf6', 'Subscriptions': '#06b6d4', 'Health': '#ef4444',
   'Bill': '#f97316', 'Expense': '#eab308', 'Transfer Out': '#a855f7', 'Withdrawal': '#f43f5e'
 };
@@ -3301,7 +3301,7 @@ function autoUpdateHoldings(acctId) {
       holding.avgCost = avgCost;
       holding.totalDividends = totalDividends;
       if (!holding.name && holdingName) holding.name = holdingName;
-      if (!holding.currentPrice) holding.currentPrice = lastBuyPrice;
+      holding.currentPrice = lastBuyPrice; // always sync to latest buy price (CAD)
     } else {
       invHoldings.push({
         id: genId(), accountId: acctId, ticker: symbol,
@@ -3315,7 +3315,7 @@ function autoUpdateHoldings(acctId) {
 }
 
 const INV_TYPE_COLORS = {
-  'buy': '#2563eb', 'sell': '#ef4444', 'dividend': '#22c55e',
+  'buy': '#d97706', 'sell': '#ef4444', 'dividend': '#22c55e',
   'deposit': '#8b5cf6', 'withdrawal': '#f59e0b', 'fee': '#64748b', 'tax': '#dc2626', 'other': '#94a3b8'
 };
 
@@ -3581,7 +3581,7 @@ function renderInvTransactions() {
 // INVESTMENT ACCOUNTS — CHARTS
 // ════════════════════════════════════════════════════════════════
 
-const INV_ACCT_COLORS = ['#2563eb', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899'];
+const INV_ACCT_COLORS = ['#d97706', '#ef4444', '#22c55e', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 function getInvMonthlyValues() {
   // Build monthly portfolio snapshots from transactions
@@ -3674,13 +3674,13 @@ function renderInvOverviewChart() {
       });
       return { month: m, value: v, cost: c, pl: v - c };
     });
-    datasets.push({ label: 'Total Value', data: totalValues, color: '#2563eb' });
+    datasets.push({ label: 'Total Value', data: totalValues, color: '#d97706' });
     datasets.push({ label: 'Cost Basis', data: totalValues.map(d => ({ ...d, value: d.cost })), color: '#94a3b8' });
   } else {
     const d = acctValues[acctFilter] || [];
     const acct = invAccounts.find(a => a.id === acctFilter);
     const name = acct ? acct.name : 'Account';
-    datasets.push({ label: name + ' Value', data: d.map(x => ({ ...x, pl: x.value - x.cost })), color: '#2563eb' });
+    datasets.push({ label: name + ' Value', data: d.map(x => ({ ...x, pl: x.value - x.cost })), color: '#d97706' });
     datasets.push({ label: 'Cost Basis', data: d.map(x => ({ ...x, value: x.cost })), color: '#94a3b8' });
   }
 
@@ -3790,7 +3790,7 @@ function renderInvHoldingsChart() {
       if (t.symbol && tickerPos[t.symbol] !== undefined) {
         if (t.type === 'buy') {
           tickerPos[t.symbol].qty += t.quantity;
-          tickerPos[t.symbol].totalCost += t.quantity * t.price;
+          tickerPos[t.symbol].totalCost += t.amount; // use CAD amount, not USD price × qty
         } else if (t.type === 'sell') {
           const avg = tickerPos[t.symbol].qty > 0 ? tickerPos[t.symbol].totalCost / tickerPos[t.symbol].qty : 0;
           tickerPos[t.symbol].qty -= t.quantity;
@@ -3834,7 +3834,7 @@ function renderInvHoldingsChart() {
     ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
   }
 
-  const holdingColors = ['#2563eb', '#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+  const holdingColors = ['#d97706', '#22c55e', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#a78bfa'];
   targetTickers.forEach((ticker, ti) => {
     const color = holdingColors[ti % holdingColors.length];
     const data = tickerMonthly[ticker];
