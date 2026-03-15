@@ -281,6 +281,16 @@
   }
   .chart-legend-item { display: flex; align-items: center; gap: 4px; }
   .chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .chart-tooltip {
+    position: fixed; display: none; pointer-events: none;
+    background: var(--sidebar-bg); color: #fff; padding: 8px 12px;
+    border-radius: 6px; font-size: .8rem; z-index: 300;
+    box-shadow: 0 4px 12px rgba(0,0,0,.2); white-space: nowrap;
+  }
+  .chart-tooltip .tt-cat { display: flex; align-items: center; gap: 6px; }
+  .chart-tooltip .tt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .chart-container { position: relative; width: 100%; height: 300px; cursor: crosshair; }
 </style>
 </head>
 <body>
@@ -1441,6 +1451,56 @@ function getCategoryMonthlyData(txns) {
   return { months: sortedMonths, categories: activeCats, data: catMonthTotals };
 }
 
+// Store data points for hover tooltips: { canvasId: [{ x, y, value, label, color, month }] }
+const chartDataPoints = {};
+
+function setupChartHover(canvas) {
+  if (canvas._hoverBound) return;
+  canvas._hoverBound = true;
+  const tooltip = document.getElementById('chart-tooltip');
+
+  canvas.addEventListener('mousemove', function(e) {
+    const points = chartDataPoints[canvas.id];
+    if (!points || points.length === 0) { tooltip.style.display = 'none'; return; }
+
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // Find closest point within 20px
+    let closest = null, minDist = 20;
+    points.forEach(p => {
+      const dist = Math.sqrt((p.x - mx) ** 2 + (p.y - my) ** 2);
+      if (dist < minDist) { minDist = dist; closest = p; }
+    });
+
+    if (closest) {
+      let html = `<div style="margin-bottom:4px;font-weight:600;">${closest.month}</div>`;
+      // Show all points for this month
+      const monthPoints = points.filter(p => p.month === closest.month && p.value > 0);
+      monthPoints.sort((a, b) => b.value - a.value);
+      monthPoints.forEach(p => {
+        const bold = p === closest ? 'font-weight:600;' : '';
+        html += `<div class="tt-cat" style="${bold}"><div class="tt-dot" style="background:${p.color}"></div>${p.label}: $${p.value.toFixed(2)}</div>`;
+      });
+      tooltip.innerHTML = html;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX + 14) + 'px';
+      tooltip.style.top = (e.clientY - 14) + 'px';
+      // Keep tooltip in viewport
+      const tr = tooltip.getBoundingClientRect();
+      if (tr.right > window.innerWidth) tooltip.style.left = (e.clientX - tr.width - 14) + 'px';
+      if (tr.bottom > window.innerHeight) tooltip.style.top = (e.clientY - tr.height - 14) + 'px';
+    } else {
+      tooltip.style.display = 'none';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', function() {
+    tooltip.style.display = 'none';
+  });
+}
+
 function drawCategoryTrendChart(canvasId, legendId, txns) {
   const canvas = document.getElementById(canvasId);
   const ctx = canvas.getContext('2d');
@@ -1456,6 +1516,7 @@ function drawCategoryTrendChart(canvasId, legendId, txns) {
   const chartW = W - pad.left - pad.right;
   const chartH = H - pad.top - pad.bottom;
   ctx.clearRect(0, 0, W, H);
+  chartDataPoints[canvasId] = [];
 
   if (months.length === 0 || categories.length === 0) {
     ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
@@ -1487,7 +1548,7 @@ function drawCategoryTrendChart(canvasId, legendId, txns) {
     ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
   }
 
-  // Draw lines for each category
+  // Draw lines for each category and store points
   categories.forEach(cat => {
     const color = CATEGORY_COLORS[cat] || '#94a3b8';
     ctx.beginPath();
@@ -1498,6 +1559,7 @@ function drawCategoryTrendChart(canvasId, legendId, txns) {
       const v = (data[cat] && data[cat][m]) || 0;
       const x = getX(i), y = getY(v);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      chartDataPoints[canvasId].push({ x, y, value: v, label: cat, color, month: formatMonth(m) });
     });
     ctx.stroke();
 
@@ -1524,6 +1586,8 @@ function drawCategoryTrendChart(canvasId, legendId, txns) {
   legendEl.innerHTML = categories.map(cat =>
     `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${CATEGORY_COLORS[cat]}"></div>${cat}</div>`
   ).join('');
+
+  setupChartHover(canvas);
 }
 
 function renderCombinedTrendChart() {
@@ -1910,6 +1974,7 @@ function renderBATrend() {
   const chartH = H - pad.top - pad.bottom;
 
   ctx.clearRect(0, 0, W, H);
+  chartDataPoints['ba-trend-chart'] = [];
 
   const minVal = Math.min(...balances) * 0.95;
   const maxVal = Math.max(...balances) * 1.05 || 1;
@@ -1937,6 +2002,7 @@ function renderBATrend() {
   balances.forEach((b, i) => {
     const x = getX(i), y = getY(b);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    chartDataPoints['ba-trend-chart'].push({ x, y, value: b, label: 'Balance', color: '#3b82f6', month: formatMonth(months[i]) });
   });
   ctx.stroke();
 
@@ -1961,6 +2027,8 @@ function renderBATrend() {
   months.forEach((m, i) => {
     ctx.fillText(formatMonth(m), getX(i), H - pad.bottom + 20);
   });
+
+  setupChartHover(canvas);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2100,6 +2168,8 @@ window.addEventListener('resize', () => {
   renderTxnTrendChart();
 });
 </script>
+
+<div class="chart-tooltip" id="chart-tooltip"></div>
 
 </body>
 </html>
