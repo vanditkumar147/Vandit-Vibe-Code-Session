@@ -346,7 +346,12 @@
         </div>
       </div>
       <div class="panel">
-        <div class="panel-title">Monthly Spending Trend by Category</div>
+        <div class="panel-title">
+          <span>Monthly Spending Trend by Category</span>
+          <select id="cc-combined-trend-cat" onchange="renderCombinedTrendChart()">
+            <option value="all">All Categories</option>
+          </select>
+        </div>
         <div class="chart-container"><canvas id="cc-combined-trend-chart"></canvas></div>
         <div id="cc-combined-trend-legend" class="chart-legend"></div>
       </div>
@@ -1125,6 +1130,10 @@ function populateMonthSelectors() {
   // Per-card trend card filter
   const perCardTrendOpts = '<option value="all">All Cards</option>' + creditCards.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
   document.getElementById('cc-percard-trend-card').innerHTML = perCardTrendOpts;
+
+  // Combined trend category filter
+  const catFilterOpts = '<option value="all">All Categories</option>' + ALL_CATEGORIES.filter(c => c !== 'Refund').map(c => `<option value="${c}">${c}</option>`).join('');
+  document.getElementById('cc-combined-trend-cat').innerHTML = catFilterOpts;
 }
 
 function formatMonth(m) {
@@ -1518,7 +1527,9 @@ function drawCategoryTrendChart(canvasId, legendId, txns) {
 }
 
 function renderCombinedTrendChart() {
-  drawCategoryTrendChart('cc-combined-trend-chart', 'cc-combined-trend-legend', ccTransactions);
+  const catFilter = document.getElementById('cc-combined-trend-cat').value;
+  const txns = catFilter === 'all' ? ccTransactions : ccTransactions.filter(t => t.category === catFilter);
+  drawCategoryTrendChart('cc-combined-trend-chart', 'cc-combined-trend-legend', txns);
 }
 
 function renderPerCardTrendChart() {
