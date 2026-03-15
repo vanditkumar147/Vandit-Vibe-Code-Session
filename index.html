@@ -1505,9 +1505,10 @@ const chartDataPoints = {};
 function setupChartHover(canvas) {
   if (canvas._hoverBound) return;
   canvas._hoverBound = true;
-  const tooltip = document.getElementById('chart-tooltip');
 
   canvas.addEventListener('mousemove', function(e) {
+    const tooltip = document.getElementById('chart-tooltip');
+    if (!tooltip) return;
     const points = chartDataPoints[canvas.id];
     if (!points || points.length === 0) { tooltip.style.display = 'none'; return; }
 
@@ -1545,7 +1546,8 @@ function setupChartHover(canvas) {
   });
 
   canvas.addEventListener('mouseleave', function() {
-    tooltip.style.display = 'none';
+    const tooltip = document.getElementById('chart-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
   });
 }
 
