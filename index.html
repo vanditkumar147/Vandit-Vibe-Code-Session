@@ -451,6 +451,23 @@
           <p>No transactions yet. Upload a CSV statement to see cash flow data.</p>
         </div>
       </div>
+      <div class="panel">
+        <div class="panel-title">
+          <span>Monthly Cash Flow Trend</span>
+          <select id="ba-summary-trend-filter" onchange="renderBASummaryTrend()">
+            <option value="all">All Types</option>
+            <option value="Income">Income</option>
+            <option value="Transfer In">Transfer In</option>
+            <option value="Transfer Out">Transfer Out</option>
+            <option value="Bill">Bill</option>
+            <option value="Expense">Expense</option>
+            <option value="Withdrawal">Withdrawal</option>
+            <option value="Refund">Refund</option>
+          </select>
+        </div>
+        <div class="chart-container"><canvas id="ba-summary-trend-chart"></canvas></div>
+        <div id="ba-summary-trend-legend" class="chart-legend"></div>
+      </div>
     </div>
 
     <!-- Balance trend -->
@@ -481,6 +498,11 @@
           </div>
         </div>
         <div id="ba-transactions-table"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Monthly Cash Flow Trend</div>
+        <div class="chart-container"><canvas id="ba-txn-trend-chart"></canvas></div>
+        <div id="ba-txn-trend-legend" class="chart-legend"></div>
       </div>
     </div>
   </div>
@@ -623,18 +645,14 @@
 <!-- Upload CSV for Bank Account -->
 <div class="modal-overlay" id="modal-upload-ba">
   <div class="modal">
-    <h2>Upload Bank Statement</h2>
+    <h2>Upload Bank Statements</h2>
     <p class="text-muted mb-4" id="upload-ba-acct-name"></p>
     <input type="hidden" id="upload-ba-acct-id">
-    <div class="form-group">
-      <label>Statement Month</label>
-      <input type="month" id="upload-ba-month">
-    </div>
     <div class="upload-area">
-      <input type="file" accept=".csv" id="ba-file-input" onchange="handleBAFileSelect(event)">
+      <input type="file" accept=".csv" id="ba-file-input" multiple onchange="handleBAFileSelect(event)">
       <div class="upload-icon">&#128196;</div>
-      <p>Click or drag a CSV file here</p>
-      <p class="text-muted mt-2" style="font-size:.75rem;">Expected columns: Date, Description, Amount</p>
+      <p>Click or drag CSV files here</p>
+      <p class="text-muted mt-2" style="font-size:.75rem;">Expected columns: Date, Description, Debit, Credit &middot; Select multiple files at once</p>
     </div>
     <div id="ba-upload-preview" class="mt-4" style="display:none;"></div>
     <div class="modal-actions">
@@ -728,7 +746,9 @@ document.querySelectorAll('.tab-bar').forEach(bar => {
       if (btn.dataset.tab === 'cc-combined') renderCombinedTrendChart();
       if (btn.dataset.tab === 'cc-percard') renderPerCardTrendChart();
       if (btn.dataset.tab === 'cc-transactions') renderTxnTrendChart();
+      if (btn.dataset.tab === 'ba-summary') renderBASummaryTrend();
       if (btn.dataset.tab === 'ba-trend') renderBATrend();
+      if (btn.dataset.tab === 'ba-transactions') renderBATxnTrend();
     });
   });
 });
@@ -1729,7 +1749,6 @@ function openUploadBAModal(acctId) {
   const acct = bankAccounts.find(a => a.id === acctId);
   document.getElementById('upload-ba-acct-id').value = acctId;
   document.getElementById('upload-ba-acct-name').textContent = acct.name;
-  document.getElementById('upload-ba-month').value = new Date().toISOString().slice(0, 7);
   document.getElementById('ba-upload-preview').style.display = 'none';
   document.getElementById('ba-upload-confirm').disabled = true;
   document.getElementById('ba-file-input').value = '';
@@ -1737,45 +1756,106 @@ function openUploadBAModal(acctId) {
   openModal('modal-upload-ba');
 }
 
-function handleBAFileSelect(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const rows = parseCSV(e.target.result);
-    pendingBATransactions = rows.map(row => {
-      const amount = parseFloat(row.amount) || 0;
-      return {
-        id: genId(),
-        accountId: document.getElementById('upload-ba-acct-id').value,
-        month: document.getElementById('upload-ba-month').value,
-        date: normalizeDate(row.date),
-        description: row.description,
-        amount: Math.abs(amount),
-        direction: amount >= 0 ? 'in' : 'out',
-        category: categorizeBankTxn(row.description, amount)
-      };
-    }).filter(t => t.amount > 0);
+function parseBankCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = splitCSVLine(lines[0]).map(h => h.toLowerCase().trim());
 
-    if (pendingBATransactions.length === 0) {
-      document.getElementById('ba-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found.</p>';
-      document.getElementById('ba-upload-preview').style.display = 'block';
-      return;
+  // Find columns
+  const dateIdx = headers.findIndex(h => h.includes('date'));
+  const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('transaction') || h.includes('memo') || h.includes('payee') || h.includes('name'));
+  const debitIdx = headers.findIndex(h => h.includes('debit') || h.includes('withdrawal'));
+  const creditIdx = headers.findIndex(h => h.includes('credit') || h.includes('deposit'));
+  const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('amt'));
+
+  // Detect format: Debit/Credit columns or single Amount column
+  const hasDebitCredit = debitIdx >= 0 && creditIdx >= 0;
+  // Fallback: assume Date, Description, Debit, Credit if no headers detected
+  const useFallback = dateIdx === -1 && descIdx === -1 && debitIdx === -1 && amtIdx === -1;
+
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 3) continue;
+    let date, description, amount;
+
+    if (useFallback) {
+      // Assume: Date, Description, Debit, Credit
+      date = cols[0];
+      description = cols[1];
+      const debit = parseFloat((cols[2] || '').replace(/[$,]/g, '')) || 0;
+      const credit = parseFloat((cols[3] || '').replace(/[$,]/g, '')) || 0;
+      amount = credit > 0 ? credit : -debit;
+    } else if (hasDebitCredit) {
+      date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
+      description = descIdx >= 0 ? cols[descIdx] : cols[1];
+      const debit = parseFloat((cols[debitIdx] || '').replace(/[$,]/g, '')) || 0;
+      const credit = parseFloat((cols[creditIdx] || '').replace(/[$,]/g, '')) || 0;
+      amount = credit > 0 ? credit : -debit;
+    } else {
+      date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
+      description = descIdx >= 0 ? cols[descIdx] : cols[1];
+      const raw = amtIdx >= 0 ? cols[amtIdx] : cols[2];
+      amount = parseFloat((raw || '').replace(/[$,]/g, '')) || 0;
     }
 
-    let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingBATransactions.length + '</strong> transactions found:</p>';
-    html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Type</th></tr>';
-    pendingBATransactions.slice(0, 20).forEach(t => {
-      const cls = t.direction === 'in' ? 'badge-income' : 'badge-expense';
-      html += `<tr><td>${t.date}</td><td>${t.description}</td><td>$${t.amount.toFixed(2)}</td><td><span class="badge ${cls}">${t.direction === 'in' ? 'Income' : 'Expense'}</span></td></tr>`;
+    if (date && description) {
+      results.push({ date: date.trim(), description: description.trim(), amount });
+    }
+  }
+  return results;
+}
+
+async function handleBAFileSelect(event) {
+  const files = Array.from(event.target.files);
+  if (files.length === 0) return;
+
+  document.getElementById('ba-upload-preview').innerHTML = '<p style="font-size:.875rem;">Processing ' + files.length + ' file' + (files.length !== 1 ? 's' : '') + '...</p>';
+  document.getElementById('ba-upload-preview').style.display = 'block';
+
+  let allRows = [];
+  for (const file of files) {
+    const text = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsText(file);
     });
-    if (pendingBATransactions.length > 20) html += `<tr><td colspan="4" class="text-muted">...and ${pendingBATransactions.length - 20} more</td></tr>`;
-    html += '</table></div>';
-    document.getElementById('ba-upload-preview').innerHTML = html;
+    allRows = allRows.concat(parseBankCSV(text));
+  }
+
+  pendingBATransactions = allRows.map(row => {
+    const amount = row.amount;
+    return {
+      id: genId(),
+      accountId: document.getElementById('upload-ba-acct-id').value,
+      date: normalizeDate(row.date),
+      description: row.description,
+      amount: Math.abs(amount),
+      direction: amount >= 0 ? 'in' : 'out',
+      category: categorizeBankTxn(row.description, amount)
+    };
+  }).filter(t => t.amount > 0);
+
+  if (pendingBATransactions.length === 0) {
+    document.getElementById('ba-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found.</p>';
     document.getElementById('ba-upload-preview').style.display = 'block';
-    document.getElementById('ba-upload-confirm').disabled = false;
-  };
-  reader.readAsText(file);
+    return;
+  }
+
+  const inCount = pendingBATransactions.filter(t => t.direction === 'in').length;
+  const outCount = pendingBATransactions.filter(t => t.direction === 'out').length;
+  let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingBATransactions.length + '</strong> transactions found (' + inCount + ' credits, ' + outCount + ' debits):</p>';
+  html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Type</th></tr>';
+  pendingBATransactions.slice(0, 20).forEach(t => {
+    const cls = t.direction === 'in' ? 'badge-income' : 'badge-expense';
+    const sign = t.direction === 'in' ? '+' : '-';
+    html += `<tr><td>${t.date}</td><td>${t.description}</td><td class="${t.direction === 'in' ? 'text-success' : 'text-danger'}">${sign}$${t.amount.toFixed(2)}</td><td><span class="badge ${cls}">${t.category}</span></td></tr>`;
+  });
+  if (pendingBATransactions.length > 20) html += `<tr><td colspan="4" class="text-muted">...and ${pendingBATransactions.length - 20} more</td></tr>`;
+  html += '</table></div>';
+  document.getElementById('ba-upload-preview').innerHTML = html;
+  document.getElementById('ba-upload-preview').style.display = 'block';
+  document.getElementById('ba-upload-confirm').disabled = false;
 }
 
 function confirmBAUpload() {
@@ -1811,6 +1891,8 @@ function refreshBankPage() {
   renderBASummary();
   renderBATrend();
   renderBATransactions();
+  renderBASummaryTrend();
+  renderBATxnTrend();
 }
 
 function renderBACards() {
@@ -2038,6 +2120,118 @@ function renderBATrend() {
 }
 
 // ════════════════════════════════════════════════════════════════
+// BANK ACCOUNT TREND CHARTS
+// ════════════════════════════════════════════════════════════════
+
+const BA_CATEGORY_COLORS = {
+  'Income': '#22c55e', 'Transfer In': '#3b82f6', 'Refund': '#06b6d4',
+  'Bill': '#ef4444', 'Expense': '#f59e0b', 'Transfer Out': '#8b5cf6',
+  'Withdrawal': '#ec4899'
+};
+
+function getBACategoryMonthlyData(txns, catFilter) {
+  const months = new Set();
+  const catMonthTotals = {};
+
+  txns.forEach(t => {
+    const m = t.date.slice(0, 7);
+    const cat = t.category || (t.direction === 'in' ? 'Income' : 'Expense');
+    if (catFilter && catFilter !== 'all' && cat !== catFilter) return;
+    months.add(m);
+    if (!catMonthTotals[cat]) catMonthTotals[cat] = {};
+    catMonthTotals[cat][m] = (catMonthTotals[cat][m] || 0) + t.amount;
+  });
+
+  const sortedMonths = Array.from(months).sort();
+  const activeCats = Object.keys(catMonthTotals).filter(c => Object.values(catMonthTotals[c]).some(v => v > 0));
+
+  return { months: sortedMonths, categories: activeCats, data: catMonthTotals, colors: BA_CATEGORY_COLORS };
+}
+
+function drawBATrendChart(canvasId, legendId, txns, catFilter) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const { months, categories, data, colors } = getBACategoryMonthlyData(txns, catFilter);
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const pad = { top: 20, right: 20, bottom: 40, left: 70 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, W, H);
+  chartDataPoints[canvasId] = [];
+
+  if (months.length === 0 || categories.length === 0) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('No data available. Upload statements to see trends.', W / 2, H / 2);
+    document.getElementById(legendId).innerHTML = '';
+    return;
+  }
+
+  let maxVal = 0;
+  categories.forEach(cat => {
+    months.forEach(m => {
+      const v = (data[cat] && data[cat][m]) || 0;
+      if (v > maxVal) maxVal = v;
+    });
+  });
+  maxVal = maxVal * 1.1 || 1;
+
+  const getX = i => pad.left + (i / (months.length - 1 || 1)) * chartW;
+  const getY = v => pad.top + chartH - (v / maxVal) * chartH;
+
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (i / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = maxVal - (i / 4) * maxVal;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
+  }
+
+  categories.forEach(cat => {
+    const color = colors[cat] || '#94a3b8';
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    months.forEach((m, i) => {
+      const v = (data[cat] && data[cat][m]) || 0;
+      const x = getX(i), y = getY(v);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      chartDataPoints[canvasId].push({ x, y, value: v, label: cat, color, month: formatMonth(m) });
+    });
+    ctx.stroke();
+    months.forEach((m, i) => {
+      const v = (data[cat] && data[cat][m]) || 0;
+      if (v > 0) {
+        ctx.beginPath(); ctx.arc(getX(i), getY(v), 3, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    });
+  });
+
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  months.forEach((m, i) => { ctx.fillText(formatMonth(m), getX(i), H - pad.bottom + 20); });
+
+  document.getElementById(legendId).innerHTML = categories.map(cat =>
+    `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${colors[cat] || '#94a3b8'}"></div>${cat}</div>`
+  ).join('');
+
+  setupChartHover(canvas);
+}
+
+function renderBASummaryTrend() {
+  const catFilter = document.getElementById('ba-summary-trend-filter').value;
+  drawBATrendChart('ba-summary-trend-chart', 'ba-summary-trend-legend', baTransactions, catFilter);
+}
+
+function renderBATxnTrend() {
+  drawBATrendChart('ba-txn-trend-chart', 'ba-txn-trend-legend', baTransactions, 'all');
+}
+
+// ════════════════════════════════════════════════════════════════
 // BACKUP & RESTORE
 // ════════════════════════════════════════════════════════════════
 
@@ -2172,6 +2366,8 @@ window.addEventListener('resize', () => {
   renderCombinedTrendChart();
   renderPerCardTrendChart();
   renderTxnTrendChart();
+  renderBASummaryTrend();
+  renderBATxnTrend();
 });
 </script>
 
