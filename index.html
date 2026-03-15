@@ -171,6 +171,7 @@
   .badge-subscriptions { background: #cffafe; color: #155e75; }
   .badge-health { background: #fecaca; color: #991b1b; }
   .badge-other { background: #f1f5f9; color: #475569; }
+  .badge-refund { background: #d1fae5; color: #065f46; }
   .badge-income { background: #d1fae5; color: #065f46; }
   .badge-expense { background: #fecaca; color: #991b1b; }
 
@@ -607,6 +608,7 @@
         <option value="Subscriptions">Subscriptions</option>
         <option value="Health">Health</option>
         <option value="Other">Other</option>
+        <option value="Refund">Refund</option>
       </select>
     </div>
     <div class="modal-actions">
@@ -851,16 +853,21 @@ function isPaymentTransaction(description) {
 
 function processCCRows(rows) {
   let skippedPayments = 0;
-  pendingCCTransactions = rows.map(row => ({
-    id: genId(),
-    cardId: document.getElementById('upload-cc-card-id').value,
-    month: document.getElementById('upload-cc-month').value,
-    date: normalizeDate(row.date),
-    description: row.description,
-    amount: Math.abs(parseFloat(row.amount)) || 0,
-    category: autoCategorize(row.description),
-    _isPayment: isPaymentTransaction(row.description)
-  })).filter(t => {
+  pendingCCTransactions = rows.map(row => {
+    const rawAmount = parseFloat(row.amount) || 0;
+    const isRefund = rawAmount < 0;
+    return {
+      id: genId(),
+      cardId: document.getElementById('upload-cc-card-id').value,
+      month: document.getElementById('upload-cc-month').value,
+      date: normalizeDate(row.date),
+      description: row.description,
+      amount: Math.abs(rawAmount),
+      isRefund,
+      category: isRefund ? 'Refund' : autoCategorize(row.description),
+      _isPayment: isPaymentTransaction(row.description)
+    };
+  }).filter(t => {
     if (t._isPayment) { skippedPayments++; return false; }
     delete t._isPayment;
     return t.amount > 0;
@@ -877,7 +884,8 @@ function processCCRows(rows) {
   html += '</p>';
   html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th></tr>';
   pendingCCTransactions.slice(0, 20).forEach(t => {
-    html += `<tr><td>${t.date}</td><td>${t.description}</td><td>$${t.amount.toFixed(2)}</td><td><span class="badge badge-${t.category.toLowerCase().replace(/\s/g,'')}">${t.category}</span></td></tr>`;
+    const amtDisplay = t.isRefund ? `<span class="text-success">-$${t.amount.toFixed(2)}</span>` : `$${t.amount.toFixed(2)}`;
+    html += `<tr><td>${t.date}</td><td>${t.description}</td><td>${amtDisplay}</td><td><span class="badge badge-${t.category.toLowerCase().replace(/\s/g,'')}">${t.category}</span></td></tr>`;
   });
   if (pendingCCTransactions.length > 20) html += `<tr><td colspan="4" class="text-muted">...and ${pendingCCTransactions.length - 20} more</td></tr>`;
   html += '</table></div>';
@@ -1073,7 +1081,8 @@ function formatMonth(m) {
 const CATEGORY_COLORS = {
   'Eating Out': '#f59e0b', 'Groceries': '#22c55e', 'Travel': '#3b82f6',
   'Gas': '#6366f1', 'Shopping': '#ec4899', 'Entertainment': '#8b5cf6',
-  'Subscriptions': '#06b6d4', 'Health': '#ef4444', 'Other': '#94a3b8'
+  'Subscriptions': '#06b6d4', 'Health': '#ef4444', 'Other': '#94a3b8',
+  'Refund': '#22c55e'
 };
 const ALL_CATEGORIES = Object.keys(CATEGORY_COLORS);
 
@@ -1092,10 +1101,14 @@ function renderCCSummary() {
   ALL_CATEGORIES.forEach(c => totals[c] = 0);
   txns.forEach(t => { totals[t.category] = (totals[t.category] || 0) + t.amount; });
 
-  const maxVal = Math.max(...Object.values(totals), 1);
-  const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
+  const refundTotal = totals['Refund'] || 0;
+  const spendingTotal = Object.entries(totals).filter(([k]) => k !== 'Refund').reduce((s, [, v]) => s + v, 0);
+  const netTotal = spendingTotal - refundTotal;
+  const maxVal = Math.max(...Object.entries(totals).filter(([k]) => k !== 'Refund').map(([, v]) => v), 1);
 
-  let html = `<div style="font-size:.875rem;margin-bottom:4px;">Total spending: <strong>$${grandTotal.toFixed(2)} CAD</strong></div>`;
+  let html = `<div style="font-size:.875rem;margin-bottom:4px;">Total spending: <strong>$${spendingTotal.toFixed(2)} CAD</strong>`;
+  if (refundTotal > 0) html += ` &middot; Refunds: <span class="text-success">-$${refundTotal.toFixed(2)}</span> &middot; Net: <strong>$${netTotal.toFixed(2)}</strong>`;
+  html += `</div>`;
   html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:16px;">Click a category to see its transactions</p>`;
   ALL_CATEGORIES.forEach(cat => {
     if (totals[cat] === 0) return;
@@ -1172,7 +1185,7 @@ function drillDownCategory(category, sortField, sortDir) {
       <td>${t.date}</td>
       <td>${card ? card.name : 'Unknown'}</td>
       <td>${t.description}</td>
-      <td>$${t.amount.toFixed(2)}</td>
+      <td>${t.isRefund ? '<span class="text-success">-$' + t.amount.toFixed(2) + '</span>' : '$' + t.amount.toFixed(2)}</td>
       <td><button class="btn btn-sm btn-secondary" onclick="openRecategorize('${t.id}','cc')">Re-cat</button></td>
     </tr>`;
   });
@@ -1245,7 +1258,7 @@ function renderCCTransactions() {
       <td>${t.date}</td>
       <td>${card ? card.name : 'Unknown'}</td>
       <td>${t.description}</td>
-      <td>$${t.amount.toFixed(2)}</td>
+      <td>${t.isRefund ? '<span class="text-success">-$' + t.amount.toFixed(2) + '</span>' : '$' + t.amount.toFixed(2)}</td>
       <td><span class="badge ${badgeClass}">${t.category}</span></td>
       <td><button class="btn btn-sm btn-secondary" onclick="openRecategorize('${t.id}','cc')">Re-cat</button></td>
     </tr>`;
