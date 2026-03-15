@@ -1111,7 +1111,7 @@ function renderCCSummary() {
   html += `</div>`;
   html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:16px;">Click a category to see its transactions</p>`;
   ALL_CATEGORIES.forEach(cat => {
-    if (totals[cat] === 0) return;
+    if (totals[cat] === 0 || cat === 'Refund') return;
     const pct = (totals[cat] / maxVal) * 100;
     const escapedCat = cat.replace(/'/g, "\\'");
     html += `<div class="cat-bar" onclick="drillDownCategory('${escapedCat}')">
@@ -1119,6 +1119,11 @@ function renderCCSummary() {
       <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
     </div>`;
   });
+  if (refundTotal > 0) {
+    html += `<div class="cat-bar" onclick="drillDownCategory('Refund')" style="margin-top:12px;border-top:1px dashed var(--border);padding-top:12px;">
+      <div class="cat-label"><span style="color:var(--success);">Refunds</span><span class="text-success">-$${refundTotal.toFixed(2)}</span></div>
+    </div>`;
+  }
   html += '<div id="cc-category-drilldown"></div>';
 
   document.getElementById('cc-category-bars').innerHTML = html;
@@ -1765,6 +1770,28 @@ function clearAllData() {
 // ════════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════════
+
+// Migrate: mark refunds on existing transactions that were imported before refund support
+(function migrateRefunds() {
+  let changed = false;
+  ccTransactions.forEach(t => {
+    if (t.isRefund === undefined) {
+      if (t.category === 'Refund' || isPaymentTransaction(t.description)) {
+        // leave as-is
+      }
+      // Check description for refund keywords
+      const lower = t.description.toLowerCase();
+      if (lower.includes('refund') || lower.includes('credit') || lower.includes('reversal') || lower.includes('rebate') || lower.includes('return')) {
+        t.isRefund = true;
+        t.category = 'Refund';
+        changed = true;
+      } else {
+        t.isRefund = false;
+      }
+    }
+  });
+  if (changed) persistCCTxn();
+})();
 
 refreshCCPage();
 refreshBankPage();
