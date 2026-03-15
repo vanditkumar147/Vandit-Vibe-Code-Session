@@ -893,7 +893,7 @@
       <input type="file" accept=".csv" id="inv-file-input" multiple onchange="handleInvFileSelect(event)">
       <div class="upload-icon">&#128196;</div>
       <p>Click or drag Wealthsimple CSV export here</p>
-      <p class="text-muted mt-2" style="font-size:.75rem;">Expected: Date, Type, Symbol, Description, Quantity, Price, Amount</p>
+      <p class="text-muted mt-2" style="font-size:.75rem;">Wealthsimple format: Date, Transaction, Description, Amount, Balance, Currency</p>
     </div>
     <div id="inv-upload-preview" class="mt-4" style="display:none;"></div>
     <div class="modal-actions">
@@ -2929,48 +2929,111 @@ function parseInvCSV(text) {
   if (lines.length < 2) return [];
   const headers = splitCSVLine(lines[0]).map(h => h.toLowerCase().trim());
 
+  // Detect column indices — support both Wealthsimple format and generic format
   const dateIdx = headers.findIndex(h => h.includes('date'));
-  const typeIdx = headers.findIndex(h => h === 'type' || h.includes('trans') && h.includes('type'));
-  const symbolIdx = headers.findIndex(h => h.includes('symbol') || h.includes('ticker'));
+  const typeIdx = headers.findIndex(h => h === 'type' || h === 'transaction' || (h.includes('trans') && !h.includes('desc')));
   const descIdx = headers.findIndex(h => h.includes('desc'));
+  const amtIdx = headers.findIndex(h => h.includes('amount'));
+  const balIdx = headers.findIndex(h => h.includes('balance'));
+  const currIdx = headers.findIndex(h => h.includes('currency') || h.includes('curr'));
+  // Optional direct columns (non-Wealthsimple formats)
+  const symbolIdx = headers.findIndex(h => h.includes('symbol') || h.includes('ticker'));
   const qtyIdx = headers.findIndex(h => h.includes('quantity') || h.includes('qty') || h.includes('units'));
   const priceIdx = headers.findIndex(h => h.includes('price') && !h.includes('amount'));
-  const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('total') || h.includes('value'));
+
+  const IGNORE_TYPES = ['recall', 'loan', 'fplint', 'stock lending'];
 
   const results = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = splitCSVLine(lines[i]);
     if (cols.length < 3) continue;
 
-    const date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
-    const type = typeIdx >= 0 ? cols[typeIdx] : cols[1];
-    const symbol = symbolIdx >= 0 ? cols[symbolIdx] : cols[2];
-    const description = descIdx >= 0 ? cols[descIdx] : cols[3] || '';
-    const quantity = qtyIdx >= 0 ? parseFloat((cols[qtyIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
-    const price = priceIdx >= 0 ? parseFloat((cols[priceIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
-    const amount = amtIdx >= 0 ? parseFloat((cols[amtIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
+    const date = (dateIdx >= 0 ? cols[dateIdx] : cols[0] || '').trim();
+    const rawType = (typeIdx >= 0 ? cols[typeIdx] : cols[1] || '').trim();
+    const description = (descIdx >= 0 ? cols[descIdx] : cols[2] || '').trim();
+    const rawAmount = amtIdx >= 0 ? parseFloat((cols[amtIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
 
-    if (date && type) {
-      results.push({
-        date: date.trim(),
-        type: categorizeInvTxnType(type.trim()),
-        symbol: symbol.trim().toUpperCase(),
-        description: description.trim(),
-        quantity,
-        price,
-        amount: Math.abs(amount)
-      });
+    if (!date || !rawType) continue;
+
+    // Skip stock lending types
+    const typeLower = rawType.toLowerCase();
+    if (IGNORE_TYPES.some(ig => typeLower.includes(ig))) continue;
+
+    const type = categorizeInvTxnType(rawType);
+
+    // Extract ticker, quantity, and price from description
+    // Patterns: "SHOP - Shopify Inc.: Bought 5.0000 shares at $154.56"
+    //           "XEQT - iShares: Sold 10 shares at $28.50"
+    //           "DIV - XEQT"
+    let symbol = '', quantity = 0, price = 0;
+
+    if (symbolIdx >= 0) {
+      symbol = (cols[symbolIdx] || '').trim().toUpperCase();
     }
+    if (qtyIdx >= 0) {
+      quantity = parseFloat((cols[qtyIdx] || '').replace(/[$,]/g, '')) || 0;
+    }
+    if (priceIdx >= 0) {
+      price = parseFloat((cols[priceIdx] || '').replace(/[$,]/g, '')) || 0;
+    }
+
+    // Parse from description if not found in dedicated columns
+    if (!symbol && description) {
+      // "SHOP - Shopify Inc.: Bought 5 shares at $154.56"
+      const tickerMatch = description.match(/^([A-Z][A-Z0-9.]{0,9})\s*[-–—]/);
+      if (tickerMatch) symbol = tickerMatch[1];
+      // Also try "DIV - XEQT" pattern
+      if (!symbol) {
+        const divTickerMatch = description.match(/[-–—]\s*([A-Z][A-Z0-9.]{0,9})(?:\s|$)/);
+        if (divTickerMatch) symbol = divTickerMatch[1];
+      }
+    }
+
+    if (!quantity && description) {
+      // "Bought 5.0000 shares" or "Sold 10 shares"
+      const qtyMatch = description.match(/(?:bought|sold|purchased|redeemed)\s+([\d,.]+)\s*(?:shares|units)/i);
+      if (qtyMatch) quantity = parseFloat(qtyMatch[1].replace(/,/g, '')) || 0;
+    }
+
+    if (!price && description) {
+      // "at $154.56" or "at 154.56"
+      const priceMatch = description.match(/at\s+\$?([\d,.]+)/i);
+      if (priceMatch) price = parseFloat(priceMatch[1].replace(/,/g, '')) || 0;
+    }
+
+    // For dividends/deposits/withdrawals without price, use amount
+    if (!price && quantity > 0) {
+      price = Math.abs(rawAmount) / quantity;
+    }
+
+    results.push({
+      date,
+      type,
+      symbol: symbol.toUpperCase(),
+      description,
+      quantity,
+      price,
+      amount: Math.abs(rawAmount)
+    });
   }
   return results;
 }
 
 function categorizeInvTxnType(type) {
+  const upper = type.toUpperCase().trim();
+  // Wealthsimple short codes
+  if (upper === 'BUY') return 'buy';
+  if (upper === 'SELL') return 'sell';
+  if (upper === 'DIV') return 'dividend';
+  if (upper === 'CONT') return 'deposit';
+  if (upper === 'WD') return 'withdrawal';
+  if (upper === 'EFT') return 'deposit';
+  // Longer names
   const lower = type.toLowerCase();
-  if (lower.includes('buy') || lower.includes('purchase')) return 'buy';
-  if (lower.includes('sell') || lower.includes('sale') || lower.includes('redemption')) return 'sell';
-  if (lower.includes('dividend') || lower.includes('distribution') || lower.includes('drip')) return 'dividend';
-  if (lower.includes('deposit') || lower.includes('contribution') || lower.includes('transfer in') || lower.includes('funding')) return 'deposit';
+  if (lower.includes('buy') || lower.includes('purchase') || lower.includes('bought')) return 'buy';
+  if (lower.includes('sell') || lower.includes('sale') || lower.includes('sold') || lower.includes('redemption')) return 'sell';
+  if (lower.includes('div') || lower.includes('distribution') || lower.includes('drip')) return 'dividend';
+  if (lower.includes('deposit') || lower.includes('contribution') || lower.includes('transfer in') || lower.includes('funding') || lower.includes('cont')) return 'deposit';
   if (lower.includes('withdraw') || lower.includes('transfer out') || lower.includes('defunding')) return 'withdrawal';
   if (lower.includes('fee') || lower.includes('commission')) return 'fee';
   return 'other';
