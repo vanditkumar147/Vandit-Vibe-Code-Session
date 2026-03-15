@@ -3180,53 +3180,90 @@ async function handleInvFileSelect(event) {
 }
 
 function confirmInvUpload() {
-  invTransactions = invTransactions.concat(pendingInvTransactions);
+  const acctId = document.getElementById('upload-inv-acct-id').value;
+
+  // Deduplicate: skip transactions that already exist (same date + type + symbol + amount)
+  const existingKeys = new Set(
+    invTransactions.filter(t => t.accountId === acctId)
+      .map(t => t.date + '|' + t.type + '|' + t.symbol + '|' + t.amount.toFixed(2))
+  );
+  const newTxns = pendingInvTransactions.filter(t => {
+    const key = t.date + '|' + t.type + '|' + t.symbol + '|' + t.amount.toFixed(2);
+    return !existingKeys.has(key);
+  });
+
+  const skipped = pendingInvTransactions.length - newTxns.length;
+  invTransactions = invTransactions.concat(newTxns);
   persistInvTxn();
 
-  // Auto-create/update holdings from buy transactions
-  const acctId = document.getElementById('upload-inv-acct-id').value;
+  // Auto-create/update holdings from transactions
   autoUpdateHoldings(acctId);
 
   pendingInvTransactions = [];
   closeModal('modal-upload-inv');
   refreshInvPage();
+
+  if (skipped > 0) {
+    alert(newTxns.length + ' new transactions imported. ' + skipped + ' duplicate' + (skipped !== 1 ? 's' : '') + ' skipped.');
+  }
 }
 
 function autoUpdateHoldings(acctId) {
-  // Group all buy/sell transactions by symbol for this account
-  const acctTxns = invTransactions.filter(t => t.accountId === acctId && t.symbol);
+  // Process all buy/sell/dividend transactions chronologically using ACB method
+  const acctTxns = invTransactions
+    .filter(t => t.accountId === acctId && t.symbol)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   const symbols = [...new Set(acctTxns.filter(t => t.type === 'buy' || t.type === 'sell').map(t => t.symbol))];
 
   symbols.forEach(symbol => {
-    const buys = acctTxns.filter(t => t.symbol === symbol && t.type === 'buy');
-    const sells = acctTxns.filter(t => t.symbol === symbol && t.type === 'sell');
+    const txns = acctTxns.filter(t => t.symbol === symbol);
+    let qty = 0;
+    let acb = 0; // Adjusted Cost Base (total cost of current position)
+    let totalDividends = 0;
+    let lastBuyPrice = 0;
 
-    const totalBuyQty = buys.reduce((s, t) => s + t.quantity, 0);
-    const totalSellQty = sells.reduce((s, t) => s + t.quantity, 0);
-    const netQty = totalBuyQty - totalSellQty;
+    txns.forEach(t => {
+      if (t.type === 'buy') {
+        // ACB increases by purchase cost
+        acb += t.quantity * t.price;
+        qty += t.quantity;
+        lastBuyPrice = t.price;
+      } else if (t.type === 'sell') {
+        if (qty > 0) {
+          // ACB decreases proportionally: remove the avg cost of shares sold
+          const costPerShare = acb / qty;
+          acb -= t.quantity * costPerShare;
+          qty -= t.quantity;
+          if (qty <= 0) { qty = 0; acb = 0; }
+        }
+      } else if (t.type === 'dividend') {
+        totalDividends += t.amount;
+      }
+    });
 
-    if (netQty <= 0) return; // fully sold
+    if (qty <= 0) return; // fully sold
 
-    const totalBuyCost = buys.reduce((s, t) => s + (t.quantity * t.price), 0);
-    const avgCost = totalBuyCost / totalBuyQty;
+    const avgCost = qty > 0 ? acb / qty : 0;
 
-    // Resolve name: check transactions for parsed name, then lookup table
-    const txnWithName = acctTxns.find(t => t.symbol === symbol && t.name);
+    // Resolve name
+    const txnWithName = txns.find(t => t.name);
     const holdingName = resolveTickerName(symbol, txnWithName ? txnWithName.name : '');
 
     // Find or create holding
     let holding = invHoldings.find(h => h.accountId === acctId && h.ticker === symbol);
     if (holding) {
-      holding.quantity = netQty;
+      holding.quantity = qty;
       holding.avgCost = avgCost;
+      holding.totalDividends = totalDividends;
       if (!holding.name && holdingName) holding.name = holdingName;
-      // Keep current price if already set, otherwise use latest buy price
-      if (!holding.currentPrice) holding.currentPrice = buys[buys.length - 1].price;
+      if (!holding.currentPrice) holding.currentPrice = lastBuyPrice;
     } else {
       invHoldings.push({
         id: genId(), accountId: acctId, ticker: symbol,
-        name: holdingName, quantity: netQty, avgCost: avgCost,
-        currentPrice: buys[buys.length - 1].price
+        name: holdingName, quantity: qty, avgCost: avgCost,
+        currentPrice: holding ? holding.currentPrice : lastBuyPrice,
+        totalDividends: totalDividends
       });
     }
   });
@@ -3278,36 +3315,45 @@ function renderInvOverview() {
     return;
   }
 
-  let totalValue = 0, totalCost = 0;
+  let totalValue = 0, totalCost = 0, totalDiv = 0;
   const acctData = invAccounts.map(acct => {
     const holdings = invHoldings.filter(h => h.accountId === acct.id);
     const value = holdings.reduce((s, h) => s + h.quantity * h.currentPrice, 0);
     const cost = holdings.reduce((s, h) => s + h.quantity * h.avgCost, 0);
-    const gain = value - cost;
-    const gainPct = cost > 0 ? (gain / cost * 100) : 0;
+    const dividends = holdings.reduce((s, h) => s + (h.totalDividends || 0), 0);
+    const priceGain = value - cost;
+    const totalReturn = priceGain + dividends;
+    const totalReturnPct = cost > 0 ? (totalReturn / cost * 100) : 0;
     totalValue += value;
     totalCost += cost;
-    return { ...acct, value, cost, gain, gainPct, holdingCount: holdings.length };
+    totalDiv += dividends;
+    return { ...acct, value, cost, dividends, priceGain, totalReturn, totalReturnPct, holdingCount: holdings.length };
   });
 
-  const totalGain = totalValue - totalCost;
-  const totalGainPct = totalCost > 0 ? (totalGain / totalCost * 100) : 0;
+  const totalPriceGain = totalValue - totalCost;
+  const totalTotalReturn = totalPriceGain + totalDiv;
+  const totalReturnPct = totalCost > 0 ? (totalTotalReturn / totalCost * 100) : 0;
 
-  let html = `<div class="grid grid-3" style="margin-bottom:16px;">
+  let html = `<div class="grid grid-${totalDiv > 0 ? '4' : '3'}" style="margin-bottom:16px;">
     <div class="stat-card" style="border-left:4px solid var(--accent);">
       <div class="label">Total Portfolio Value</div>
       <div class="value">$${totalValue.toFixed(2)}</div>
       <div class="sub">Cost basis: $${totalCost.toFixed(2)}</div>
     </div>
-    <div class="stat-card" style="border-left:4px solid ${totalGain >= 0 ? 'var(--success)' : 'var(--danger)'};">
-      <div class="label">Total Gain/Loss</div>
-      <div class="value ${totalGain >= 0 ? 'text-success' : 'text-danger'}">${totalGain >= 0 ? '+' : ''}$${totalGain.toFixed(2)}</div>
-      <div class="sub ${totalGain >= 0 ? 'text-success' : 'text-danger'}">${totalGainPct >= 0 ? '+' : ''}${totalGainPct.toFixed(2)}%</div>
+    <div class="stat-card" style="border-left:4px solid ${totalPriceGain >= 0 ? 'var(--success)' : 'var(--danger)'};">
+      <div class="label">Price Gain/Loss</div>
+      <div class="value ${totalPriceGain >= 0 ? 'text-success' : 'text-danger'}">${totalPriceGain >= 0 ? '+' : ''}$${totalPriceGain.toFixed(2)}</div>
+      <div class="sub">Market value vs cost</div>
     </div>
-    <div class="stat-card" style="border-left:4px solid var(--warning);">
-      <div class="label">Accounts</div>
-      <div class="value">${invAccounts.length}</div>
-      <div class="sub">${invHoldings.length} holding${invHoldings.length !== 1 ? 's' : ''} total</div>
+    ${totalDiv > 0 ? `<div class="stat-card" style="border-left:4px solid var(--success);">
+      <div class="label">Dividends Received</div>
+      <div class="value text-success">+$${totalDiv.toFixed(2)}</div>
+      <div class="sub">Total distributions</div>
+    </div>` : ''}
+    <div class="stat-card" style="border-left:4px solid ${totalTotalReturn >= 0 ? 'var(--success)' : 'var(--danger)'};">
+      <div class="label">Total Return</div>
+      <div class="value ${totalTotalReturn >= 0 ? 'text-success' : 'text-danger'}">${totalTotalReturn >= 0 ? '+' : ''}$${totalTotalReturn.toFixed(2)}</div>
+      <div class="sub ${totalTotalReturn >= 0 ? 'text-success' : 'text-danger'}">${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(2)}%</div>
     </div>
   </div>`;
 
@@ -3316,7 +3362,8 @@ function renderInvOverview() {
     html += `<div class="stat-card due-ok">
       <div class="label">${acct.name} <span class="text-muted">(${acct.type})</span></div>
       <div class="value">$${acct.value.toFixed(2)}</div>
-      <div class="sub">Cost: $${acct.cost.toFixed(2)} &middot; <span class="${acct.gain >= 0 ? 'text-success' : 'text-danger'}">${acct.gain >= 0 ? '+' : ''}$${acct.gain.toFixed(2)} (${acct.gainPct >= 0 ? '+' : ''}${acct.gainPct.toFixed(2)}%)</span></div>
+      <div class="sub">Cost: $${acct.cost.toFixed(2)} &middot; Price: <span class="${acct.priceGain >= 0 ? 'text-success' : 'text-danger'}">${acct.priceGain >= 0 ? '+' : ''}$${acct.priceGain.toFixed(2)}</span>${acct.dividends > 0 ? ' &middot; Div: <span class="text-success">+$' + acct.dividends.toFixed(2) + '</span>' : ''}</div>
+      <div class="sub">Total return: <span class="${acct.totalReturn >= 0 ? 'text-success' : 'text-danger'}">${acct.totalReturn >= 0 ? '+' : ''}$${acct.totalReturn.toFixed(2)} (${acct.totalReturnPct >= 0 ? '+' : ''}${acct.totalReturnPct.toFixed(2)}%)</span></div>
       <div class="mt-2" style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-sm btn-primary" onclick="openUploadInvModal('${acct.id}')">Upload CSV</button>
         <button class="btn btn-sm btn-secondary" onclick="openAddHoldingModal('${acct.id}')">Add Holding</button>
@@ -3354,32 +3401,37 @@ function renderInvHoldings() {
     const acctName = acct ? acct.name + ' (' + acct.type + ')' : 'Unknown';
     const acctValue = acctHoldings.reduce((s, h) => s + h.quantity * h.currentPrice, 0);
     const acctCost = acctHoldings.reduce((s, h) => s + h.quantity * h.avgCost, 0);
-    const acctGain = acctValue - acctCost;
-    const acctGainPct = acctCost > 0 ? (acctGain / acctCost * 100) : 0;
+    const acctDiv = acctHoldings.reduce((s, h) => s + (h.totalDividends || 0), 0);
+    const acctPriceGain = acctValue - acctCost;
+    const acctTotalReturn = acctPriceGain + acctDiv;
+    const acctTotalReturnPct = acctCost > 0 ? (acctTotalReturn / acctCost * 100) : 0;
 
     html += `<div style="margin-bottom:24px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="font-size:1rem;">${acctName}</h3>
         <div style="font-size:.875rem;">
           Value: <strong>$${acctValue.toFixed(2)}</strong> &middot;
-          <span class="${acctGain >= 0 ? 'text-success' : 'text-danger'}">${acctGain >= 0 ? '+' : ''}$${acctGain.toFixed(2)} (${acctGainPct >= 0 ? '+' : ''}${acctGainPct.toFixed(2)}%)</span>
+          Total return: <span class="${acctTotalReturn >= 0 ? 'text-success' : 'text-danger'}">${acctTotalReturn >= 0 ? '+' : ''}$${acctTotalReturn.toFixed(2)} (${acctTotalReturnPct >= 0 ? '+' : ''}${acctTotalReturnPct.toFixed(2)}%)</span>
         </div>
       </div>
       <table>
         <tr>
           <th>Ticker</th><th>Name</th><th style="text-align:right;">Qty</th>
           <th style="text-align:right;">Avg Cost</th><th style="text-align:right;">Current Price</th>
-          <th style="text-align:right;">Market Value</th><th style="text-align:right;">Gain/Loss</th><th></th>
+          <th style="text-align:right;">Market Value</th><th style="text-align:right;">Dividends</th><th style="text-align:right;">Total Return</th><th></th>
         </tr>`;
 
     acctHoldings.sort((a, b) => (b.quantity * b.currentPrice) - (a.quantity * a.currentPrice));
     acctHoldings.forEach(h => {
       const mktVal = h.quantity * h.currentPrice;
       const costBasis = h.quantity * h.avgCost;
-      const gl = mktVal - costBasis;
-      const glPct = costBasis > 0 ? (gl / costBasis * 100) : 0;
-      const cls = gl >= 0 ? 'text-success' : 'text-danger';
-      const sign = gl >= 0 ? '+' : '';
+      const priceGL = mktVal - costBasis;
+      const divs = h.totalDividends || 0;
+      const totalReturn = priceGL + divs;
+      const totalReturnPct = costBasis > 0 ? (totalReturn / costBasis * 100) : 0;
+      const priceCls = priceGL >= 0 ? 'text-success' : 'text-danger';
+      const totalCls = totalReturn >= 0 ? 'text-success' : 'text-danger';
+      const totalSign = totalReturn >= 0 ? '+' : '';
 
       html += `<tr>
         <td><strong>${h.ticker}</strong></td>
@@ -3387,8 +3439,9 @@ function renderInvHoldings() {
         <td style="text-align:right;">${h.quantity.toFixed(4).replace(/\.?0+$/, '')}</td>
         <td style="text-align:right;">$${h.avgCost.toFixed(2)}</td>
         <td style="text-align:right;">$${h.currentPrice.toFixed(2)}</td>
-        <td style="text-align:right;"><strong>$${mktVal.toFixed(2)}</strong></td>
-        <td style="text-align:right;" class="${cls}">${sign}$${gl.toFixed(2)}<br><span style="font-size:.75rem;">${sign}${glPct.toFixed(2)}%</span></td>
+        <td style="text-align:right;"><strong>$${mktVal.toFixed(2)}</strong><br><span class="${priceCls}" style="font-size:.75rem;">${priceGL >= 0 ? '+' : ''}$${priceGL.toFixed(2)}</span></td>
+        <td style="text-align:right;">${divs > 0 ? '<span class="text-success">+$' + divs.toFixed(2) + '</span>' : '—'}</td>
+        <td style="text-align:right;" class="${totalCls}"><strong>${totalSign}$${totalReturn.toFixed(2)}</strong><br><span style="font-size:.75rem;">${totalSign}${totalReturnPct.toFixed(2)}%</span></td>
         <td style="white-space:nowrap;">
           <button class="btn btn-sm btn-secondary" onclick="openUpdatePriceModal('${h.id}')" title="Update price">&#128196;</button>
           <button class="btn btn-sm btn-secondary" onclick="openEditHoldingModal('${h.id}')" title="Edit">&#9998;</button>
