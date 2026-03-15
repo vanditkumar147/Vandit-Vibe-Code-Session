@@ -1026,25 +1026,31 @@ function parseCSV(text) {
   const headerLine = lines[0];
   const headers = splitCSVLine(headerLine).map(h => h.toLowerCase().trim());
 
-  // Find columns
+  // Find columns — order matters: match specific headers first to avoid conflicts
+  // e.g. "Transaction Date" could match both date and description if not careful
   const dateIdx = headers.findIndex(h => h.includes('date'));
-  const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('merchant') || h.includes('name') || h.includes('memo') || h.includes('payee') || h.includes('transaction'));
-  const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('amt') || h.includes('debit') || h.includes('charge'));
+  const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('amt') || h.includes('charge'));
+  const descIdx = headers.findIndex(h => {
+    if (h === headers[dateIdx] || h === headers[amtIdx]) return false; // skip already-matched columns
+    return h.includes('desc') || h.includes('merchant') || h.includes('name') || h.includes('memo') || h.includes('payee') || h.includes('transaction');
+  });
+  // If desc wasn't found, pick the first unmatched column that isn't date or amount
+  const descIdxFinal = descIdx >= 0 ? descIdx : headers.findIndex((h, i) => i !== dateIdx && i !== amtIdx);
 
   // Fallback: if no headers detected, assume order: date, description, amount
-  const useFallback = dateIdx === -1 && descIdx === -1 && amtIdx === -1;
+  const useFallback = dateIdx === -1 && descIdxFinal === -1 && amtIdx === -1;
 
   const results = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = splitCSVLine(lines[i]);
-    if (cols.length < 3) continue;
+    if (cols.length < 2) continue;
     let date, description, amount;
     if (useFallback) {
-      date = cols[0]; description = cols[1]; amount = cols[2];
+      date = cols[0]; description = cols[1]; amount = cols[2] || '0';
     } else {
       date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
-      description = descIdx >= 0 ? cols[descIdx] : cols[1];
-      amount = amtIdx >= 0 ? cols[amtIdx] : cols[2];
+      description = descIdxFinal >= 0 ? cols[descIdxFinal] : cols[1];
+      amount = amtIdx >= 0 ? cols[amtIdx] : cols[cols.length - 1];
     }
     if (date && description) {
       results.push({ date: date.trim(), description: description.trim(), amount: amount ? amount.trim().replace(/[$,]/g, '') : '0' });
