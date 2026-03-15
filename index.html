@@ -2047,76 +2047,89 @@ function renderBACards() {
   `).join('');
 }
 
+function renderBASummarySection(txns, title, acctId) {
+  const moneyIn = txns.filter(t => t.direction === 'in').reduce((s, t) => s + t.amount, 0);
+  const moneyOut = txns.filter(t => t.direction === 'out').reduce((s, t) => s + t.amount, 0);
+  const net = moneyIn - moneyOut;
+
+  const inCats = {}, outCats = {};
+  txns.forEach(t => {
+    if (t.direction === 'in') inCats[t.category] = (inCats[t.category] || 0) + t.amount;
+    else outCats[t.category] = (outCats[t.category] || 0) + t.amount;
+  });
+
+  const maxIn = Math.max(...Object.values(inCats), 1);
+  const maxOut = Math.max(...Object.values(outCats), 1);
+  const escapedAcctId = acctId ? acctId.replace(/'/g, "\\'") : '';
+  const drillAcctArg = acctId ? "'" + escapedAcctId + "'" : 'null';
+
+  if (txns.length === 0) {
+    return `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:1rem;margin-bottom:12px;">${title}</h3>
+      <p class="text-muted" style="font-size:.875rem;">No transactions for this month.</p>
+    </div>`;
+  }
+
+  return `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
+    <h3 style="font-size:1rem;margin-bottom:12px;">${title}</h3>
+    <div class="grid grid-3" style="margin-bottom:16px;">
+      <div class="stat-card"><div class="label">Money In</div><div class="value text-success">$${moneyIn.toFixed(2)}</div></div>
+      <div class="stat-card"><div class="label">Money Out</div><div class="value text-danger">$${moneyOut.toFixed(2)}</div></div>
+      <div class="stat-card"><div class="label">Net</div><div class="value ${net >= 0 ? 'text-success' : 'text-danger'}">$${net.toFixed(2)}</div></div>
+    </div>
+    <div style="display:flex;gap:32px;">
+      <div style="flex:1;">
+        <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">INCOMING</h4>
+        ${Object.entries(inCats).map(([cat, amt]) => {
+          const pct = (amt / maxIn * 100).toFixed(1);
+          const color = BA_CATEGORY_COLORS[cat] || '#94a3b8';
+          const escapedCat = cat.replace(/'/g, "\\'");
+          return `<div class="cat-bar" onclick="drillDownBACategory('${escapedCat}','ba-summary-drilldown',${drillAcctArg})">
+            <div class="cat-label"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>
+            <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${color};"></div></div>
+          </div>`;
+        }).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
+      </div>
+      <div style="flex:1;">
+        <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">OUTGOING</h4>
+        ${Object.entries(outCats).map(([cat, amt]) => {
+          const pct = (amt / maxOut * 100).toFixed(1);
+          const color = BA_CATEGORY_COLORS[cat] || '#94a3b8';
+          const escapedCat = cat.replace(/'/g, "\\'");
+          return `<div class="cat-bar" onclick="drillDownBACategory('${escapedCat}','ba-summary-drilldown',${drillAcctArg})">
+            <div class="cat-label"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>
+            <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${color};"></div></div>
+          </div>`;
+        }).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderBASummary() {
   const month = document.getElementById('ba-month-select').value;
   const container = document.getElementById('ba-summary-content');
   const emptyEl = document.getElementById('ba-summary-empty');
 
-  const txns = baTransactions.filter(t => t.date.slice(0, 7) === month);
-  if (txns.length === 0) {
+  if (bankAccounts.length === 0) {
     container.innerHTML = '';
     emptyEl.style.display = 'block';
     return;
   }
   emptyEl.style.display = 'none';
 
-  // Group by account
+  const allTxns = baTransactions.filter(t => t.date.slice(0, 7) === month);
   let html = '';
-  const accounts = bankAccounts.length > 0 ? bankAccounts : [{ id: 'unknown', name: 'Unknown Account' }];
 
-  accounts.forEach(acct => {
-    const acctTxns = txns.filter(t => t.accountId === acct.id);
-    if (acctTxns.length === 0) return;
+  // Combined summary across all accounts (if more than one)
+  if (bankAccounts.length > 1) {
+    html += renderBASummarySection(allTxns, 'All Accounts — Combined', null);
+  }
 
-    const moneyIn = acctTxns.filter(t => t.direction === 'in').reduce((s, t) => s + t.amount, 0);
-    const moneyOut = acctTxns.filter(t => t.direction === 'out').reduce((s, t) => s + t.amount, 0);
-    const net = moneyIn - moneyOut;
-
-    // Group by category
-    const inCats = {}, outCats = {};
-    acctTxns.forEach(t => {
-      if (t.direction === 'in') inCats[t.category] = (inCats[t.category] || 0) + t.amount;
-      else outCats[t.category] = (outCats[t.category] || 0) + t.amount;
-    });
-
-    const maxIn = Math.max(...Object.values(inCats), 1);
-    const maxOut = Math.max(...Object.values(outCats), 1);
-    const escapedAcctId = acct.id.replace(/'/g, "\\'");
-
-    html += `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
-      <h3 style="font-size:1rem;margin-bottom:12px;">${acct.name}</h3>
-      <div class="grid grid-3" style="margin-bottom:16px;">
-        <div class="stat-card"><div class="label">Money In</div><div class="value text-success">$${moneyIn.toFixed(2)}</div></div>
-        <div class="stat-card"><div class="label">Money Out</div><div class="value text-danger">$${moneyOut.toFixed(2)}</div></div>
-        <div class="stat-card"><div class="label">Net</div><div class="value ${net >= 0 ? 'text-success' : 'text-danger'}">$${net.toFixed(2)}</div></div>
-      </div>
-      <div style="display:flex;gap:32px;">
-        <div style="flex:1;">
-          <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">INCOMING</h4>
-          ${Object.entries(inCats).map(([cat, amt]) => {
-            const pct = (amt / maxIn * 100).toFixed(1);
-            const color = BA_CATEGORY_COLORS[cat] || '#94a3b8';
-            const escapedCat = cat.replace(/'/g, "\\'");
-            return `<div class="cat-bar" onclick="drillDownBACategory('${escapedCat}','ba-summary-drilldown','${escapedAcctId}')">
-              <div class="cat-label"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>
-              <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${color};"></div></div>
-            </div>`;
-          }).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
-        </div>
-        <div style="flex:1;">
-          <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">OUTGOING</h4>
-          ${Object.entries(outCats).map(([cat, amt]) => {
-            const pct = (amt / maxOut * 100).toFixed(1);
-            const color = BA_CATEGORY_COLORS[cat] || '#94a3b8';
-            const escapedCat = cat.replace(/'/g, "\\'");
-            return `<div class="cat-bar" onclick="drillDownBACategory('${escapedCat}','ba-summary-drilldown','${escapedAcctId}')">
-              <div class="cat-label"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>
-              <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${color};"></div></div>
-            </div>`;
-          }).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
-        </div>
-      </div>
-    </div>`;
+  // Per-account breakdown — always show every account
+  bankAccounts.forEach(acct => {
+    const acctTxns = allTxns.filter(t => t.accountId === acct.id);
+    html += renderBASummarySection(acctTxns, acct.name + ' <span class="text-muted">(' + acct.type + ')</span>', acct.id);
   });
 
   container.innerHTML = html;
