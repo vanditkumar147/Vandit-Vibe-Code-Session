@@ -1335,6 +1335,18 @@ function renderPerCard() {
   container.innerHTML = html;
 }
 
+let txnTableSort = { field: 'date', dir: 'desc' };
+
+function sortCCTransactions(field) {
+  if (txnTableSort.field === field) {
+    txnTableSort.dir = txnTableSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    txnTableSort.field = field;
+    txnTableSort.dir = field === 'amount' ? 'desc' : 'asc';
+  }
+  renderCCTransactions();
+}
+
 function renderCCTransactions() {
   const cardFilter = document.getElementById('cc-txn-card-filter').value;
   const monthFilter = document.getElementById('cc-txn-month-filter').value;
@@ -1343,7 +1355,20 @@ function renderCCTransactions() {
   if (cardFilter !== 'all') txns = txns.filter(t => t.cardId === cardFilter);
   if (monthFilter !== 'all') txns = txns.filter(t => t.date.slice(0, 7) === monthFilter);
 
-  txns.sort((a, b) => b.date.localeCompare(a.date));
+  // Sort
+  const cardNameMap = {};
+  creditCards.forEach(c => { cardNameMap[c.id] = c.name; });
+  txns.sort((a, b) => {
+    let cmp = 0;
+    switch (txnTableSort.field) {
+      case 'date': cmp = a.date.localeCompare(b.date); break;
+      case 'card': cmp = (cardNameMap[a.cardId] || '').localeCompare(cardNameMap[b.cardId] || ''); break;
+      case 'description': cmp = a.description.localeCompare(b.description); break;
+      case 'amount': cmp = a.amount - b.amount; break;
+      case 'category': cmp = a.category.localeCompare(b.category); break;
+    }
+    return txnTableSort.dir === 'asc' ? cmp : -cmp;
+  });
 
   const container = document.getElementById('cc-transactions-table');
   if (txns.length === 0) {
@@ -1351,7 +1376,17 @@ function renderCCTransactions() {
     return;
   }
 
-  let html = '<div style="max-height:500px;overflow-y:auto;"><table><tr><th>Date</th><th>Card</th><th>Description</th><th>Amount</th><th>Category</th><th></th></tr>';
+  const sf = txnTableSort.field;
+  const sd = txnTableSort.dir;
+  const sortCls = (f) => f === sf ? (sd === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
+
+  let html = '<div style="max-height:500px;overflow-y:auto;"><table><tr>';
+  html += `<th class="${sortCls('date')}" onclick="sortCCTransactions('date')">Date</th>`;
+  html += `<th class="${sortCls('card')}" onclick="sortCCTransactions('card')">Card</th>`;
+  html += `<th class="${sortCls('description')}" onclick="sortCCTransactions('description')">Description</th>`;
+  html += `<th class="${sortCls('amount')}" onclick="sortCCTransactions('amount')">Amount</th>`;
+  html += `<th class="${sortCls('category')}" onclick="sortCCTransactions('category')">Category</th>`;
+  html += '<th></th></tr>';
   txns.forEach(t => {
     const card = creditCards.find(c => c.id === t.cardId);
     const badgeClass = 'badge-' + t.category.toLowerCase().replace(/\s/g, '');
@@ -1499,9 +1534,14 @@ function openRecategorize(txnId, source) {
   const txns = source === 'cc' ? ccTransactions : baTransactions;
   const txn = txns.find(t => t.id === txnId);
   if (!txn) return;
+  const descLower = txn.description.toLowerCase().trim();
+  const matchCount = txns.filter(t => t.description.toLowerCase().trim() === descLower).length;
   document.getElementById('recat-txn-id').value = txnId;
   document.getElementById('recat-source').value = source;
-  document.getElementById('recat-description').textContent = txn.description + ' — $' + txn.amount.toFixed(2);
+  let label = txn.description + ' — $' + txn.amount.toFixed(2);
+  if (matchCount > 1) label += '\n(Will apply to all ' + matchCount + ' transactions with this name)';
+  document.getElementById('recat-description').textContent = label;
+  document.getElementById('recat-description').style.whiteSpace = 'pre-line';
   document.getElementById('recat-category').value = txn.category;
   openModal('modal-recategorize');
 }
@@ -1510,14 +1550,34 @@ function saveRecategorize() {
   const txnId = document.getElementById('recat-txn-id').value;
   const source = document.getElementById('recat-source').value;
   const newCat = document.getElementById('recat-category').value;
+  const isRefund = newCat === 'Refund';
 
   if (source === 'cc') {
     const txn = ccTransactions.find(t => t.id === txnId);
-    if (txn) { txn.category = newCat; persistCCTxn(); }
+    if (txn) {
+      const descLower = txn.description.toLowerCase().trim();
+      let count = 0;
+      ccTransactions.forEach(t => {
+        if (t.description.toLowerCase().trim() === descLower) {
+          t.category = newCat;
+          t.isRefund = isRefund;
+          count++;
+        }
+      });
+      persistCCTxn();
+    }
     refreshCCPage();
   } else {
     const txn = baTransactions.find(t => t.id === txnId);
-    if (txn) { txn.category = newCat; persistBATxn(); }
+    if (txn) {
+      const descLower = txn.description.toLowerCase().trim();
+      baTransactions.forEach(t => {
+        if (t.description.toLowerCase().trim() === descLower) {
+          t.category = newCat;
+        }
+      });
+      persistBATxn();
+    }
     refreshBankPage();
   }
   closeModal('modal-recategorize');
