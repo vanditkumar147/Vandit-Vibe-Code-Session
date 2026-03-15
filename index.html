@@ -1114,13 +1114,13 @@ function renderCCSummary() {
     if (totals[cat] === 0 || cat === 'Refund') return;
     const pct = (totals[cat] / maxVal) * 100;
     const escapedCat = cat.replace(/'/g, "\\'");
-    html += `<div class="cat-bar" onclick="drillDownCategory('${escapedCat}')">
+    html += `<div class="cat-bar" onclick="drillDownCategory('${escapedCat}','cc-category-drilldown')">
       <div class="cat-label"><span>${cat}</span><span>$${totals[cat].toFixed(2)}</span></div>
       <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
     </div>`;
   });
   if (refundTotal > 0) {
-    html += `<div class="cat-bar" onclick="drillDownCategory('Refund')" style="margin-top:12px;border-top:1px dashed var(--border);padding-top:12px;">
+    html += `<div class="cat-bar" onclick="drillDownCategory('Refund','cc-category-drilldown')" style="margin-top:12px;border-top:1px dashed var(--border);padding-top:12px;">
       <div class="cat-label"><span style="color:var(--success);">Refunds</span><span class="text-success">-$${refundTotal.toFixed(2)}</span></div>
     </div>`;
   }
@@ -1130,8 +1130,20 @@ function renderCCSummary() {
 }
 
 let drilldownSort = { field: 'date', dir: 'desc' };
+let drilldownOpen = {}; // tracks which container+category is open
 
-function drillDownCategory(category, sortField, sortDir) {
+function drillDownCategory(category, containerId, cardId, sortField) {
+  containerId = containerId || 'cc-category-drilldown';
+  const openKey = containerId + '::' + category;
+  const container = document.getElementById(containerId);
+
+  // Toggle: if clicking same category without a sort change, close it
+  if (!sortField && drilldownOpen[containerId] === category) {
+    container.innerHTML = '';
+    delete drilldownOpen[containerId];
+    return;
+  }
+
   if (sortField) {
     if (drilldownSort.field === sortField) {
       drilldownSort.dir = drilldownSort.dir === 'asc' ? 'desc' : 'asc';
@@ -1143,12 +1155,16 @@ function drillDownCategory(category, sortField, sortDir) {
     drilldownSort = { field: 'date', dir: 'desc' };
   }
 
-  const month = document.getElementById('cc-month-select').value;
-  const txns = ccTransactions.filter(t => t.category === category && (t.month || t.date.slice(0, 7)) === month);
-  const container = document.getElementById('cc-category-drilldown');
+  drilldownOpen[containerId] = category;
+
+  const monthEl = document.getElementById(cardId ? 'cc-percard-month' : 'cc-month-select');
+  const month = monthEl.value;
+  let txns = ccTransactions.filter(t => t.category === category && (t.month || t.date.slice(0, 7)) === month);
+  if (cardId) txns = txns.filter(t => t.cardId === cardId);
 
   if (txns.length === 0) {
     container.innerHTML = '';
+    delete drilldownOpen[containerId];
     return;
   }
 
@@ -1168,6 +1184,8 @@ function drillDownCategory(category, sortField, sortDir) {
 
   const badgeClass = 'badge-' + category.toLowerCase().replace(/\s/g, '');
   const escapedCat = category.replace(/'/g, "\\'");
+  const escapedContainer = containerId.replace(/'/g, "\\'");
+  const cardArg = cardId ? ",'" + cardId.replace(/'/g, "\\'") + "'" : ",null";
   const sf = drilldownSort.field;
   const sd = drilldownSort.dir;
   const sortCls = (f) => f === sf ? (sd === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
@@ -1175,13 +1193,13 @@ function drillDownCategory(category, sortField, sortDir) {
   let html = `<div class="cat-drilldown">
     <div class="cat-drilldown-header">
       <span><span class="badge ${badgeClass}">${category}</span> &mdash; ${txns.length} transaction${txns.length !== 1 ? 's' : ''}</span>
-      <button class="cat-drilldown-close" onclick="document.getElementById('cc-category-drilldown').innerHTML=''">&times;</button>
+      <button class="cat-drilldown-close" onclick="document.getElementById('${escapedContainer}').innerHTML='';delete drilldownOpen['${escapedContainer}']">&times;</button>
     </div>
     <table><tr>
-      <th class="${sortCls('date')}" onclick="drillDownCategory('${escapedCat}','date')">Date</th>
-      <th class="${sortCls('card')}" onclick="drillDownCategory('${escapedCat}','card')">Card</th>
-      <th class="${sortCls('description')}" onclick="drillDownCategory('${escapedCat}','description')">Description</th>
-      <th class="${sortCls('amount')}" onclick="drillDownCategory('${escapedCat}','amount')">Amount</th>
+      <th class="${sortCls('date')}" onclick="drillDownCategory('${escapedCat}','${escapedContainer}'${cardArg},'date')">Date</th>
+      <th class="${sortCls('card')}" onclick="drillDownCategory('${escapedCat}','${escapedContainer}'${cardArg},'card')">Card</th>
+      <th class="${sortCls('description')}" onclick="drillDownCategory('${escapedCat}','${escapedContainer}'${cardArg},'description')">Description</th>
+      <th class="${sortCls('amount')}" onclick="drillDownCategory('${escapedCat}','${escapedContainer}'${cardArg},'amount')">Amount</th>
       <th></th>
     </tr>`;
   txns.forEach(t => {
@@ -1213,25 +1231,35 @@ function renderPerCard() {
     const totals = {};
     ALL_CATEGORIES.forEach(c => totals[c] = 0);
     txns.forEach(t => { totals[t.category] = (totals[t.category] || 0) + t.amount; });
-    const total = Object.values(totals).reduce((a, b) => a + b, 0);
-    const maxVal = Math.max(...Object.values(totals), 1);
+    const refundTotal = totals['Refund'] || 0;
+    const spendingTotal = Object.entries(totals).filter(([k]) => k !== 'Refund').reduce((s, [, v]) => s + v, 0);
+    const maxVal = Math.max(...Object.entries(totals).filter(([k]) => k !== 'Refund').map(([, v]) => v), 1);
+    const drilldownId = 'percard-drilldown-' + card.id;
 
     html += `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
-      <div class="flex-between" style="margin-bottom:12px;">
+      <div class="flex-between" style="margin-bottom:4px;">
         <strong>${card.name}</strong>
-        <span>$${total.toFixed(2)} total</span>
+        <span>$${spendingTotal.toFixed(2)} total${refundTotal > 0 ? ' · <span class="text-success">-$' + refundTotal.toFixed(2) + ' refunds</span>' : ''}</span>
       </div>`;
     if (txns.length === 0) {
       html += '<p class="text-muted" style="font-size:.875rem;">No transactions for this month.</p>';
     } else {
+      html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:8px;">Click a category to see transactions</p>`;
       ALL_CATEGORIES.forEach(cat => {
-        if (totals[cat] === 0) return;
+        if (totals[cat] === 0 || cat === 'Refund') return;
         const pct = (totals[cat] / maxVal) * 100;
-        html += `<div class="cat-bar">
+        const escapedCat = cat.replace(/'/g, "\\'");
+        html += `<div class="cat-bar" onclick="drillDownCategory('${escapedCat}','${drilldownId}','${card.id}')">
           <div class="cat-label"><span>${cat}</span><span>$${totals[cat].toFixed(2)}</span></div>
           <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
         </div>`;
       });
+      if (refundTotal > 0) {
+        html += `<div class="cat-bar" onclick="drillDownCategory('Refund','${drilldownId}','${card.id}')" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px;">
+          <div class="cat-label"><span style="color:var(--success);">Refunds</span><span class="text-success">-$${refundTotal.toFixed(2)}</span></div>
+        </div>`;
+      }
+      html += `<div id="${drilldownId}"></div>`;
     }
     html += '</div>';
   });
