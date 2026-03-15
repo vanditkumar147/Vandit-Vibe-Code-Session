@@ -8,8 +8,8 @@
 <style>
   :root {
     --bg: #f9f5f0;
-    --sidebar-bg: #1a1714;
-    --sidebar-hover: #2e2a26;
+    --sidebar-bg: #e0d5c7;
+    --sidebar-hover: #d1c4b3;
     --sidebar-active: #d97706;
     --card-bg: #ffffff;
     --text: #2c2520;
@@ -38,7 +38,7 @@
   .sidebar {
     width: 240px;
     background: var(--sidebar-bg);
-    color: #fff;
+    color: var(--text);
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
@@ -51,18 +51,18 @@
     font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -.5px;
-    border-bottom: 1px solid rgba(255,255,255,.12);
+    border-bottom: 1px solid rgba(0,0,0,.1);
   }
-  .sidebar-brand span { color: #93c5fd; }
+  .sidebar-brand span { color: #d97706; }
   .sidebar-nav { flex: 1; padding: 12px 0; }
   .sidebar-nav button {
     display: flex; align-items: center; gap: 12px;
     width: 100%; padding: 12px 20px;
-    background: none; border: none; color: #94a3b8;
+    background: none; border: none; color: #6b5d4f;
     font-size: .938rem; cursor: pointer;
     transition: all .15s;
   }
-  .sidebar-nav button:hover { background: var(--sidebar-hover); color: #e2e8f0; }
+  .sidebar-nav button:hover { background: var(--sidebar-hover); color: #3d3228; }
   .sidebar-nav button.active { background: var(--sidebar-active); color: #fff; border-radius: 8px; margin: 0 8px; width: calc(100% - 16px); }
   .sidebar-nav button svg { width: 20px; height: 20px; flex-shrink: 0; }
 
