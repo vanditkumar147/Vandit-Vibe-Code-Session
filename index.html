@@ -2850,11 +2850,21 @@ function openEditHoldingModal(id) {
   openModal('modal-add-holding');
 }
 
+// Auto-populate name when ticker is entered
+document.getElementById('holding-ticker').addEventListener('blur', function() {
+  const ticker = this.value.trim().toUpperCase();
+  const nameInput = document.getElementById('holding-name');
+  if (ticker && !nameInput.value.trim()) {
+    const name = resolveTickerName(ticker, '');
+    if (name) nameInput.value = name;
+  }
+});
+
 function saveHolding() {
   const editId = document.getElementById('edit-holding-id').value;
   const accountId = document.getElementById('holding-account').value;
   const ticker = document.getElementById('holding-ticker').value.trim().toUpperCase();
-  const name = document.getElementById('holding-name').value.trim();
+  const name = document.getElementById('holding-name').value.trim() || resolveTickerName(ticker, '');
   const quantity = parseFloat(document.getElementById('holding-qty').value) || 0;
   const avgCost = parseFloat(document.getElementById('holding-avg-cost').value) || 0;
   const currentPrice = parseFloat(document.getElementById('holding-current-price').value) || 0;
@@ -2924,6 +2934,100 @@ function openUploadInvModal(acctId) {
   openModal('modal-upload-inv');
 }
 
+// Common Canadian ticker-to-name lookup
+const TICKER_NAMES = {
+  'XEQT': 'iShares Core Equity ETF', 'XGRO': 'iShares Core Growth ETF', 'XBAL': 'iShares Core Balanced ETF',
+  'VEQT': 'Vanguard All-Equity ETF', 'VGRO': 'Vanguard Growth ETF', 'VBAL': 'Vanguard Balanced ETF',
+  'VFV': 'Vanguard S&P 500 ETF', 'VCN': 'Vanguard FTSE Canada ETF', 'VUN': 'Vanguard US Total Market ETF',
+  'VXC': 'Vanguard FTSE Global ex-Canada ETF', 'VAB': 'Vanguard Canadian Aggregate Bond ETF',
+  'XIU': 'iShares S&P/TSX 60 ETF', 'XIC': 'iShares Core S&P/TSX ETF', 'XUS': 'iShares Core S&P 500 ETF',
+  'XAW': 'iShares Core MSCI All World ex Canada', 'XBB': 'iShares Core Canadian Universe Bond',
+  'QQC': 'Invesco Nasdaq 100 ETF', 'ZSP': 'BMO S&P 500 ETF', 'ZAG': 'BMO Aggregate Bond ETF',
+  'TEC': 'TD Global Technology Leaders ETF', 'TD': 'TD Bank', 'SHOP': 'Shopify Inc.',
+  'RY': 'Royal Bank of Canada', 'BNS': 'Bank of Nova Scotia', 'BMO': 'Bank of Montreal',
+  'CM': 'CIBC', 'NA': 'National Bank of Canada', 'MFC': 'Manulife Financial',
+  'SU': 'Suncor Energy', 'ENB': 'Enbridge Inc.', 'CNR': 'CN Rail', 'CP': 'CP Kansas City',
+  'BCE': 'BCE Inc.', 'T': 'Telus Corp.', 'BAM': 'Brookfield Asset Management',
+  'CSU': 'Constellation Software', 'ATD': 'Alimentation Couche-Tard', 'WSP': 'WSP Global',
+  'AAPL': 'Apple Inc.', 'MSFT': 'Microsoft Corp.', 'AMZN': 'Amazon.com Inc.',
+  'GOOGL': 'Alphabet Inc.', 'GOOG': 'Alphabet Inc.', 'META': 'Meta Platforms Inc.',
+  'TSLA': 'Tesla Inc.', 'NVDA': 'NVIDIA Corp.', 'JPM': 'JPMorgan Chase',
+  'V': 'Visa Inc.', 'MA': 'Mastercard Inc.', 'NFLX': 'Netflix Inc.',
+  'DIS': 'Walt Disney Co.', 'AMD': 'AMD Inc.', 'INTC': 'Intel Corp.',
+  'COST': 'Costco Wholesale', 'WMT': 'Walmart Inc.', 'SPY': 'SPDR S&P 500 ETF',
+  'QQQ': 'Invesco QQQ Trust', 'VOO': 'Vanguard S&P 500 ETF', 'VTI': 'Vanguard Total Stock Market ETF',
+  'ARKK': 'ARK Innovation ETF', 'PLTR': 'Palantir Technologies', 'SOFI': 'SoFi Technologies',
+  'CASH': 'Cash', 'BIL.B': 'HISA ETF', 'HSAV': 'Horizons Cash Maximizer ETF',
+  'PSA': 'Purpose High Interest Savings ETF', 'CSAV': 'CI High Interest Savings ETF'
+};
+
+// Track names extracted from descriptions during CSV parsing
+let parsedTickerNames = {};
+
+function extractFromDescription(description) {
+  // Extract ticker, name, quantity, and price from Wealthsimple description text
+  // Patterns:
+  //   "SHOP - Shopify Inc.: Bought 5.0000 shares at $154.56"
+  //   "XEQT - iShares Core Equity ETF Portfolio: Sold 10 shares at $28.50"
+  //   "Dividends earned on XEQT"
+  //   "Contributed to account"
+  //   "Withdrew from account"
+  let symbol = '', name = '', quantity = 0, price = 0;
+
+  if (!description) return { symbol, name, quantity, price };
+
+  // Pattern 1: "TICKER - Company Name: Bought/Sold X shares at $Y"
+  const fullMatch = description.match(/^([A-Z][A-Z0-9.]{0,9})\s*[-–—]\s*(.+?):\s*(bought|sold|purchased|redeemed)/i);
+  if (fullMatch) {
+    symbol = fullMatch[1].toUpperCase();
+    name = fullMatch[2].trim();
+  }
+
+  // Pattern 2: "TICKER - Company Name" (no action, e.g. dividend line)
+  if (!symbol) {
+    const simpleMatch = description.match(/^([A-Z][A-Z0-9.]{0,9})\s*[-–—]\s*(.+?)(?::|$)/i);
+    if (simpleMatch) {
+      symbol = simpleMatch[1].toUpperCase();
+      const potentialName = simpleMatch[2].trim();
+      // Only use as name if it doesn't look like an action
+      if (!potentialName.match(/^(bought|sold|dividend|contributed|withdrew)/i)) {
+        name = potentialName;
+      }
+    }
+  }
+
+  // Pattern 3: "Dividends earned on TICKER" or "DIV - TICKER"
+  if (!symbol) {
+    const divMatch = description.match(/(?:dividend|div|earned on|reinvested)\s+(?:on\s+)?([A-Z][A-Z0-9.]{0,9})/i);
+    if (divMatch) symbol = divMatch[1].toUpperCase();
+  }
+
+  // Pattern 4: Just a ticker at the start
+  if (!symbol) {
+    const startMatch = description.match(/^([A-Z][A-Z0-9.]{0,9})(?:\s|$)/);
+    if (startMatch && startMatch[1].length >= 2) symbol = startMatch[1];
+  }
+
+  // Extract quantity: "Bought 5.0000 shares" or "Sold 10 shares"
+  const qtyMatch = description.match(/(?:bought|sold|purchased|redeemed)\s+([\d,.]+)\s*(?:shares|units)?/i);
+  if (qtyMatch) quantity = parseFloat(qtyMatch[1].replace(/,/g, '')) || 0;
+
+  // Extract price: "at $154.56" or "at 154.56"
+  const priceMatch = description.match(/at\s+\$?([\d,.]+)/i);
+  if (priceMatch) price = parseFloat(priceMatch[1].replace(/,/g, '')) || 0;
+
+  return { symbol, name, quantity, price };
+}
+
+function resolveTickerName(ticker, parsedName) {
+  if (!ticker) return '';
+  // Priority: name from description > known lookup > empty
+  if (parsedName) return parsedName;
+  if (TICKER_NAMES[ticker]) return TICKER_NAMES[ticker];
+  if (parsedTickerNames[ticker]) return parsedTickerNames[ticker];
+  return '';
+}
+
 function parseInvCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
@@ -2934,8 +3038,6 @@ function parseInvCSV(text) {
   const typeIdx = headers.findIndex(h => h === 'type' || h === 'transaction' || (h.includes('trans') && !h.includes('desc')));
   const descIdx = headers.findIndex(h => h.includes('desc'));
   const amtIdx = headers.findIndex(h => h.includes('amount'));
-  const balIdx = headers.findIndex(h => h.includes('balance'));
-  const currIdx = headers.findIndex(h => h.includes('currency') || h.includes('curr'));
   // Optional direct columns (non-Wealthsimple formats)
   const symbolIdx = headers.findIndex(h => h.includes('symbol') || h.includes('ticker'));
   const qtyIdx = headers.findIndex(h => h.includes('quantity') || h.includes('qty') || h.includes('units'));
@@ -2943,6 +3045,7 @@ function parseInvCSV(text) {
 
   const IGNORE_TYPES = ['recall', 'loan', 'fplint', 'stock lending'];
 
+  parsedTickerNames = {}; // reset for this parse session
   const results = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = splitCSVLine(lines[i]);
@@ -2951,7 +3054,12 @@ function parseInvCSV(text) {
     const date = (dateIdx >= 0 ? cols[dateIdx] : cols[0] || '').trim();
     const rawType = (typeIdx >= 0 ? cols[typeIdx] : cols[1] || '').trim();
     const description = (descIdx >= 0 ? cols[descIdx] : cols[2] || '').trim();
-    const rawAmount = amtIdx >= 0 ? parseFloat((cols[amtIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
+
+    // Parse amount — handle negative values, $, commas, parentheses
+    let rawAmountStr = amtIdx >= 0 ? (cols[amtIdx] || '').trim() : '';
+    const isNeg = rawAmountStr.startsWith('-') || rawAmountStr.startsWith('(');
+    const rawAmount = parseFloat(rawAmountStr.replace(/[$,()]/g, '')) || 0;
+    const signedAmount = isNeg ? -rawAmount : rawAmount;
 
     if (!date || !rawType) continue;
 
@@ -2961,55 +3069,34 @@ function parseInvCSV(text) {
 
     const type = categorizeInvTxnType(rawType);
 
-    // Extract ticker, quantity, and price from description
-    // Patterns: "SHOP - Shopify Inc.: Bought 5.0000 shares at $154.56"
-    //           "XEQT - iShares: Sold 10 shares at $28.50"
-    //           "DIV - XEQT"
-    let symbol = '', quantity = 0, price = 0;
+    // Extract data from description or dedicated columns
+    let symbol = '', name = '', quantity = 0, price = 0;
 
-    if (symbolIdx >= 0) {
-      symbol = (cols[symbolIdx] || '').trim().toUpperCase();
-    }
-    if (qtyIdx >= 0) {
-      quantity = parseFloat((cols[qtyIdx] || '').replace(/[$,]/g, '')) || 0;
-    }
-    if (priceIdx >= 0) {
-      price = parseFloat((cols[priceIdx] || '').replace(/[$,]/g, '')) || 0;
-    }
+    // Use dedicated columns if available
+    if (symbolIdx >= 0) symbol = (cols[symbolIdx] || '').trim().toUpperCase();
+    if (qtyIdx >= 0) quantity = parseFloat((cols[qtyIdx] || '').replace(/[$,]/g, '')) || 0;
+    if (priceIdx >= 0) price = parseFloat((cols[priceIdx] || '').replace(/[$,]/g, '')) || 0;
 
-    // Parse from description if not found in dedicated columns
-    if (!symbol && description) {
-      // "SHOP - Shopify Inc.: Bought 5 shares at $154.56"
-      const tickerMatch = description.match(/^([A-Z][A-Z0-9.]{0,9})\s*[-–—]/);
-      if (tickerMatch) symbol = tickerMatch[1];
-      // Also try "DIV - XEQT" pattern
-      if (!symbol) {
-        const divTickerMatch = description.match(/[-–—]\s*([A-Z][A-Z0-9.]{0,9})(?:\s|$)/);
-        if (divTickerMatch) symbol = divTickerMatch[1];
-      }
+    // Parse from description for anything not found in dedicated columns
+    const parsed = extractFromDescription(description);
+    if (!symbol && parsed.symbol) symbol = parsed.symbol;
+    if (parsed.name) name = parsed.name;
+    if (!quantity && parsed.quantity) quantity = parsed.quantity;
+    if (!price && parsed.price) price = parsed.price;
+
+    // Derive price from amount and quantity if still missing
+    if (!price && quantity > 0 && rawAmount > 0) {
+      price = rawAmount / quantity;
     }
 
-    if (!quantity && description) {
-      // "Bought 5.0000 shares" or "Sold 10 shares"
-      const qtyMatch = description.match(/(?:bought|sold|purchased|redeemed)\s+([\d,.]+)\s*(?:shares|units)/i);
-      if (qtyMatch) quantity = parseFloat(qtyMatch[1].replace(/,/g, '')) || 0;
-    }
-
-    if (!price && description) {
-      // "at $154.56" or "at 154.56"
-      const priceMatch = description.match(/at\s+\$?([\d,.]+)/i);
-      if (priceMatch) price = parseFloat(priceMatch[1].replace(/,/g, '')) || 0;
-    }
-
-    // For dividends/deposits/withdrawals without price, use amount
-    if (!price && quantity > 0) {
-      price = Math.abs(rawAmount) / quantity;
-    }
+    // Store parsed name for this ticker
+    if (symbol && name) parsedTickerNames[symbol] = name;
 
     results.push({
       date,
       type,
       symbol: symbol.toUpperCase(),
+      name: resolveTickerName(symbol, name),
       description,
       quantity,
       price,
@@ -3063,6 +3150,7 @@ async function handleInvFileSelect(event) {
     date: normalizeDate(row.date),
     type: row.type,
     symbol: row.symbol,
+    name: row.name || '',
     description: row.description,
     quantity: row.quantity,
     price: row.price,
@@ -3079,12 +3167,12 @@ async function handleInvFileSelect(event) {
   const summary = Object.entries(typeCounts).map(([k, v]) => v + ' ' + k).join(', ');
 
   let html = `<p style="font-size:.875rem;margin-bottom:8px;"><strong>${pendingInvTransactions.length}</strong> transactions found (${summary}):</p>`;
-  html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Amount</th></tr>';
+  html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Type</th><th>Symbol</th><th>Name</th><th>Qty</th><th>Price</th><th>Amount</th></tr>';
   pendingInvTransactions.slice(0, 20).forEach(t => {
     const typeBadge = INV_TYPE_COLORS[t.type] || '#94a3b8';
-    html += `<tr><td>${t.date}</td><td><span class="badge" style="background:${typeBadge}20;color:${typeBadge};">${t.type}</span></td><td><strong>${t.symbol || '—'}</strong></td><td>${t.quantity || '—'}</td><td>${t.price ? '$' + t.price.toFixed(2) : '—'}</td><td>$${t.amount.toFixed(2)}</td></tr>`;
+    html += `<tr><td>${t.date}</td><td><span class="badge" style="background:${typeBadge}20;color:${typeBadge};">${t.type}</span></td><td><strong>${t.symbol || '—'}</strong></td><td style="font-size:.75rem;">${t.name || '—'}</td><td>${t.quantity || '—'}</td><td>${t.price ? '$' + t.price.toFixed(2) : '—'}</td><td>$${t.amount.toFixed(2)}</td></tr>`;
   });
-  if (pendingInvTransactions.length > 20) html += `<tr><td colspan="6" class="text-muted">...and ${pendingInvTransactions.length - 20} more</td></tr>`;
+  if (pendingInvTransactions.length > 20) html += `<tr><td colspan="7" class="text-muted">...and ${pendingInvTransactions.length - 20} more</td></tr>`;
   html += '</table></div>';
   document.getElementById('inv-upload-preview').innerHTML = html;
   document.getElementById('inv-upload-preview').style.display = 'block';
@@ -3122,17 +3210,22 @@ function autoUpdateHoldings(acctId) {
     const totalBuyCost = buys.reduce((s, t) => s + (t.quantity * t.price), 0);
     const avgCost = totalBuyCost / totalBuyQty;
 
+    // Resolve name: check transactions for parsed name, then lookup table
+    const txnWithName = acctTxns.find(t => t.symbol === symbol && t.name);
+    const holdingName = resolveTickerName(symbol, txnWithName ? txnWithName.name : '');
+
     // Find or create holding
     let holding = invHoldings.find(h => h.accountId === acctId && h.ticker === symbol);
     if (holding) {
       holding.quantity = netQty;
       holding.avgCost = avgCost;
+      if (!holding.name && holdingName) holding.name = holdingName;
       // Keep current price if already set, otherwise use latest buy price
       if (!holding.currentPrice) holding.currentPrice = buys[buys.length - 1].price;
     } else {
       invHoldings.push({
         id: genId(), accountId: acctId, ticker: symbol,
-        name: '', quantity: netQty, avgCost: avgCost,
+        name: holdingName, quantity: netQty, avgCost: avgCost,
         currentPrice: buys[buys.length - 1].price
       });
     }
