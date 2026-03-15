@@ -250,6 +250,12 @@
     font-size: 1.1rem; padding: 2px 6px; border-radius: 4px;
   }
   .cat-drilldown-close:hover { background: var(--border); }
+
+  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sortable:hover { color: var(--accent); }
+  th.sortable::after { content: ' \2195'; font-size: .7rem; opacity: .4; }
+  th.sortable.sort-asc::after { content: ' \2191'; opacity: 1; color: var(--accent); }
+  th.sortable.sort-desc::after { content: ' \2193'; opacity: 1; color: var(--accent); }
 </style>
 </head>
 <body>
@@ -794,7 +800,17 @@ function parsePDFText(text) {
   return rows;
 }
 
+function isPaymentTransaction(description) {
+  const lower = description.toLowerCase();
+  const paymentKeywords = ['payment received', 'payment thank you', 'payment - thank', 'payment credited',
+    'online payment', 'auto payment', 'autopay', 'bill payment', 'payment from', 'credit payment',
+    'balance payment', 'minimum payment', 'pymt received', 'pmt received', 'payment reversal',
+    'thank you for your payment', 'credit adjustment', 'payment adjustment'];
+  return paymentKeywords.some(kw => lower.includes(kw));
+}
+
 function processCCRows(rows) {
+  let skippedPayments = 0;
   pendingCCTransactions = rows.map(row => ({
     id: genId(),
     cardId: document.getElementById('upload-cc-card-id').value,
@@ -802,8 +818,13 @@ function processCCRows(rows) {
     date: normalizeDate(row.date),
     description: row.description,
     amount: Math.abs(parseFloat(row.amount)) || 0,
-    category: autoCategorize(row.description)
-  })).filter(t => t.amount > 0);
+    category: autoCategorize(row.description),
+    _isPayment: isPaymentTransaction(row.description)
+  })).filter(t => {
+    if (t._isPayment) { skippedPayments++; return false; }
+    delete t._isPayment;
+    return t.amount > 0;
+  });
 
   if (pendingCCTransactions.length === 0) {
     document.getElementById('cc-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found. Ensure the file contains transaction data with dates, descriptions, and amounts.</p>';
@@ -811,7 +832,9 @@ function processCCRows(rows) {
     return;
   }
 
-  let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingCCTransactions.length + '</strong> transactions found:</p>';
+  let html = '<p style="font-size:.875rem;margin-bottom:8px;"><strong>' + pendingCCTransactions.length + '</strong> transactions found.';
+  if (skippedPayments > 0) html += ' <span class="text-muted">(' + skippedPayments + ' payment' + (skippedPayments !== 1 ? 's' : '') + ' excluded)</span>';
+  html += '</p>';
   html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Description</th><th>Amount</th><th>Category</th></tr>';
   pendingCCTransactions.slice(0, 20).forEach(t => {
     html += `<tr><td>${t.date}</td><td>${t.description}</td><td>$${t.amount.toFixed(2)}</td><td><span class="badge badge-${t.category.toLowerCase().replace(/\s/g,'')}">${t.category}</span></td></tr>`;
@@ -1048,7 +1071,20 @@ function renderCCSummary() {
   document.getElementById('cc-category-bars').innerHTML = html;
 }
 
-function drillDownCategory(category) {
+let drilldownSort = { field: 'date', dir: 'desc' };
+
+function drillDownCategory(category, sortField, sortDir) {
+  if (sortField) {
+    if (drilldownSort.field === sortField) {
+      drilldownSort.dir = drilldownSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      drilldownSort.field = sortField;
+      drilldownSort.dir = sortField === 'amount' ? 'desc' : 'asc';
+    }
+  } else {
+    drilldownSort = { field: 'date', dir: 'desc' };
+  }
+
   const month = document.getElementById('cc-month-select').value;
   const txns = ccTransactions.filter(t => t.category === category && (t.month || t.date.slice(0, 7)) === month);
   const container = document.getElementById('cc-category-drilldown');
@@ -1058,15 +1094,38 @@ function drillDownCategory(category) {
     return;
   }
 
-  txns.sort((a, b) => b.date.localeCompare(a.date));
+  // Sort
+  const cardNameMap = {};
+  creditCards.forEach(c => { cardNameMap[c.id] = c.name; });
+  txns.sort((a, b) => {
+    let cmp = 0;
+    switch (drilldownSort.field) {
+      case 'date': cmp = a.date.localeCompare(b.date); break;
+      case 'card': cmp = (cardNameMap[a.cardId] || '').localeCompare(cardNameMap[b.cardId] || ''); break;
+      case 'description': cmp = a.description.localeCompare(b.description); break;
+      case 'amount': cmp = a.amount - b.amount; break;
+    }
+    return drilldownSort.dir === 'asc' ? cmp : -cmp;
+  });
+
   const badgeClass = 'badge-' + category.toLowerCase().replace(/\s/g, '');
+  const escapedCat = category.replace(/'/g, "\\'");
+  const sf = drilldownSort.field;
+  const sd = drilldownSort.dir;
+  const sortCls = (f) => f === sf ? (sd === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
 
   let html = `<div class="cat-drilldown">
     <div class="cat-drilldown-header">
       <span><span class="badge ${badgeClass}">${category}</span> &mdash; ${txns.length} transaction${txns.length !== 1 ? 's' : ''}</span>
       <button class="cat-drilldown-close" onclick="document.getElementById('cc-category-drilldown').innerHTML=''">&times;</button>
     </div>
-    <table><tr><th>Date</th><th>Card</th><th>Description</th><th>Amount</th><th></th></tr>`;
+    <table><tr>
+      <th class="${sortCls('date')}" onclick="drillDownCategory('${escapedCat}','date')">Date</th>
+      <th class="${sortCls('card')}" onclick="drillDownCategory('${escapedCat}','card')">Card</th>
+      <th class="${sortCls('description')}" onclick="drillDownCategory('${escapedCat}','description')">Description</th>
+      <th class="${sortCls('amount')}" onclick="drillDownCategory('${escapedCat}','amount')">Amount</th>
+      <th></th>
+    </tr>`;
   txns.forEach(t => {
     const card = creditCards.find(c => c.id === t.cardId);
     html += `<tr>
