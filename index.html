@@ -713,6 +713,11 @@ document.querySelectorAll('.tab-bar').forEach(bar => {
       btn.classList.add('active');
       parent.querySelectorAll('.tab-content').forEach(tc => tc.style.display = 'none');
       document.getElementById('tab-' + btn.dataset.tab).style.display = 'block';
+      // Re-render charts when their tab becomes visible (canvas needs dimensions)
+      if (btn.dataset.tab === 'cc-combined') renderCombinedTrendChart();
+      if (btn.dataset.tab === 'cc-percard') renderPerCardTrendChart();
+      if (btn.dataset.tab === 'cc-transactions') renderTxnTrendChart();
+      if (btn.dataset.tab === 'ba-trend') renderBATrend();
     });
   });
 });
