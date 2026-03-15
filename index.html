@@ -1033,12 +1033,12 @@ function renderCCSummary() {
   const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
 
   let html = `<div style="font-size:.875rem;margin-bottom:4px;">Total spending: <strong>$${grandTotal.toFixed(2)} CAD</strong></div>`;
-  html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:16px;">Double-click a category to see its transactions</p>`;
+  html += `<p class="text-muted" style="font-size:.75rem;margin-bottom:16px;">Click a category to see its transactions</p>`;
   ALL_CATEGORIES.forEach(cat => {
     if (totals[cat] === 0) return;
     const pct = (totals[cat] / maxVal) * 100;
     const escapedCat = cat.replace(/'/g, "\\'");
-    html += `<div class="cat-bar" ondblclick="drillDownCategory('${escapedCat}')">
+    html += `<div class="cat-bar" onclick="drillDownCategory('${escapedCat}')">
       <div class="cat-label"><span>${cat}</span><span>$${totals[cat].toFixed(2)}</span></div>
       <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${CATEGORY_COLORS[cat]}"></div></div>
     </div>`;
