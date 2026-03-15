@@ -3614,7 +3614,7 @@ function getInvMonthlyValues() {
       if (t.type === 'buy' && t.symbol) {
         if (!ah[t.symbol]) ah[t.symbol] = { qty: 0, totalCost: 0 };
         ah[t.symbol].qty += t.quantity;
-        ah[t.symbol].totalCost += t.quantity * t.price;
+        ah[t.symbol].totalCost += t.amount;
       } else if (t.type === 'sell' && t.symbol && ah[t.symbol]) {
         const avgCost = ah[t.symbol].qty > 0 ? ah[t.symbol].totalCost / ah[t.symbol].qty : 0;
         ah[t.symbol].qty -= t.quantity;
