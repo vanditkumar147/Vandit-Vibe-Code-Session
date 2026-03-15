@@ -272,6 +272,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
       Bank Accounts
     </button>
+    <button data-page="data-backup">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Backup &amp; Restore
+    </button>
   </div>
 </nav>
 
@@ -418,6 +422,42 @@
         </div>
         <div id="ba-transactions-table"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- BACKUP & RESTORE PAGE                       -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="page-data-backup" class="page">
+    <div class="page-header">
+      <h1>Backup & Restore</h1>
+      <p>Export your data to a file or import a previous backup. Your data is stored in this browser only — back it up to keep it safe.</p>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="panel">
+        <div class="panel-title">Export Data</div>
+        <p style="font-size:.875rem;color:var(--text-light);margin-bottom:16px;">Download all your credit cards, bank accounts, and transactions as a JSON file. Keep this file safe as a backup.</p>
+        <div id="export-stats" style="font-size:.875rem;margin-bottom:16px;"></div>
+        <button class="btn btn-primary" onclick="exportData()">Download Backup</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Import Data</div>
+        <p style="font-size:.875rem;color:var(--text-light);margin-bottom:16px;">Restore from a previously exported JSON backup file. This will replace all current data.</p>
+        <div class="upload-area" style="margin-bottom:16px;">
+          <input type="file" accept=".json" id="import-file-input" onchange="handleImportFile(event)">
+          <div class="upload-icon">&#128228;</div>
+          <p>Click or drag a backup JSON file here</p>
+        </div>
+        <div id="import-preview" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="panel mt-4">
+      <div class="panel-title" style="color:var(--danger);">Danger Zone</div>
+      <p style="font-size:.875rem;color:var(--text-light);margin-bottom:16px;">Permanently delete all data from this browser. This cannot be undone unless you have a backup.</p>
+      <button class="btn btn-danger" onclick="clearAllData()">Delete All Data</button>
     </div>
   </div>
 
@@ -1611,11 +1651,111 @@ function renderBATrend() {
 }
 
 // ════════════════════════════════════════════════════════════════
+// BACKUP & RESTORE
+// ════════════════════════════════════════════════════════════════
+
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    creditCards,
+    ccTransactions,
+    bankAccounts,
+    baTransactions
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'finance-tracker-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function renderExportStats() {
+  const el = document.getElementById('export-stats');
+  if (!el) return;
+  el.innerHTML = `<strong>Current data:</strong> ${creditCards.length} credit card${creditCards.length !== 1 ? 's' : ''}, ${ccTransactions.length} CC transaction${ccTransactions.length !== 1 ? 's' : ''}, ${bankAccounts.length} bank account${bankAccounts.length !== 1 ? 's' : ''}, ${baTransactions.length} bank transaction${baTransactions.length !== 1 ? 's' : ''}`;
+}
+
+let pendingImportData = null;
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.creditCards && !data.bankAccounts) {
+        document.getElementById('import-preview').innerHTML = '<p class="text-danger">Invalid backup file. No finance data found.</p>';
+        document.getElementById('import-preview').style.display = 'block';
+        return;
+      }
+      pendingImportData = data;
+      const cc = (data.creditCards || []).length;
+      const ccTxn = (data.ccTransactions || []).length;
+      const ba = (data.bankAccounts || []).length;
+      const baTxn = (data.baTransactions || []).length;
+      const date = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'Unknown';
+
+      document.getElementById('import-preview').innerHTML = `
+        <div class="panel" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+          <p style="font-size:.875rem;margin-bottom:8px;"><strong>Backup from:</strong> ${date}</p>
+          <p style="font-size:.875rem;margin-bottom:12px;">${cc} credit card${cc !== 1 ? 's' : ''}, ${ccTxn} CC transaction${ccTxn !== 1 ? 's' : ''}, ${ba} bank account${ba !== 1 ? 's' : ''}, ${baTxn} bank transaction${baTxn !== 1 ? 's' : ''}</p>
+          <p class="text-danger" style="font-size:.813rem;margin-bottom:12px;">This will replace all current data.</p>
+          <button class="btn btn-primary" onclick="confirmImport()">Restore This Backup</button>
+        </div>`;
+      document.getElementById('import-preview').style.display = 'block';
+    } catch (err) {
+      document.getElementById('import-preview').innerHTML = '<p class="text-danger">Could not read file: ' + err.message + '</p>';
+      document.getElementById('import-preview').style.display = 'block';
+    }
+  };
+  reader.readAsText(file);
+}
+
+function confirmImport() {
+  if (!pendingImportData) return;
+  if (!confirm('This will replace ALL current data. Are you sure?')) return;
+
+  creditCards = pendingImportData.creditCards || [];
+  ccTransactions = pendingImportData.ccTransactions || [];
+  bankAccounts = pendingImportData.bankAccounts || [];
+  baTransactions = pendingImportData.baTransactions || [];
+
+  persistCC(); persistCCTxn(); persistBA(); persistBATxn();
+  pendingImportData = null;
+
+  document.getElementById('import-preview').innerHTML = '<p class="text-success" style="font-size:.875rem;"><strong>Data restored successfully.</strong></p>';
+  document.getElementById('import-file-input').value = '';
+  renderExportStats();
+  refreshCCPage();
+  refreshBankPage();
+}
+
+function clearAllData() {
+  if (!confirm('Delete ALL data? This cannot be undone unless you have a backup.')) return;
+  if (!confirm('Are you really sure? All credit cards, bank accounts, and transactions will be permanently deleted.')) return;
+
+  creditCards = []; ccTransactions = []; bankAccounts = []; baTransactions = [];
+  persistCC(); persistCCTxn(); persistBA(); persistBATxn();
+
+  refreshCCPage();
+  refreshBankPage();
+  renderExportStats();
+  alert('All data has been deleted.');
+}
+
+// ════════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════════
 
 refreshCCPage();
 refreshBankPage();
+renderExportStats();
 
 // Redraw chart on resize
 window.addEventListener('resize', () => { renderBATrend(); });
