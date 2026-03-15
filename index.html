@@ -312,6 +312,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
       Bank Accounts
     </button>
+    <button data-page="investments">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Investments
+    </button>
     <button data-page="data-backup">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       Backup &amp; Restore
@@ -523,6 +527,105 @@
   </div>
 
   <!-- ═══════════════════════════════════════════ -->
+  <!-- INVESTMENTS PAGE                             -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="page-investments" class="page">
+    <div class="page-header flex-between">
+      <div>
+        <h1>Investment Accounts</h1>
+        <p>Track your TFSA, RRSP, and other investment portfolios.</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="openAddInvAccountModal()">+ Add Account</button>
+        <button class="btn btn-secondary" onclick="openAddHoldingModal()">+ Add Holding</button>
+      </div>
+    </div>
+
+    <!-- Portfolio overview cards -->
+    <div id="inv-overview-cards" class="mb-4"></div>
+
+    <!-- Tabs -->
+    <div class="tab-bar" id="inv-tabs">
+      <button class="active" data-tab="inv-overview">Overview</button>
+      <button data-tab="inv-holdings">Holdings</button>
+      <button data-tab="inv-performance">Performance</button>
+      <button data-tab="inv-transactions">Transactions</button>
+    </div>
+
+    <!-- Overview tab -->
+    <div id="tab-inv-overview" class="tab-content">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Portfolio Value Over Time</span>
+          <select id="inv-overview-acct-filter" onchange="renderInvOverviewChart()">
+            <option value="all">All Accounts</option>
+          </select>
+        </div>
+        <div class="chart-container"><canvas id="inv-overview-chart"></canvas></div>
+        <div id="inv-overview-legend" class="chart-legend"></div>
+      </div>
+    </div>
+
+    <!-- Holdings tab -->
+    <div id="tab-inv-holdings" class="tab-content" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Current Holdings</span>
+          <select id="inv-holdings-acct-filter" onchange="renderInvHoldings()">
+            <option value="all">All Accounts</option>
+          </select>
+        </div>
+        <div id="inv-holdings-content"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">
+          <span>Holdings Value Over Time</span>
+          <select id="inv-holdings-ticker-filter" onchange="renderInvHoldingsChart()">
+            <option value="all">All Holdings</option>
+          </select>
+        </div>
+        <div class="chart-container"><canvas id="inv-holdings-chart"></canvas></div>
+        <div id="inv-holdings-legend" class="chart-legend"></div>
+      </div>
+    </div>
+
+    <!-- Performance tab -->
+    <div id="tab-inv-performance" class="tab-content" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Account Value Over Time</span>
+        </div>
+        <div class="chart-container"><canvas id="inv-performance-chart"></canvas></div>
+        <div id="inv-performance-legend" class="chart-legend"></div>
+      </div>
+    </div>
+
+    <!-- Transactions tab -->
+    <div id="tab-inv-transactions" class="tab-content" style="display:none;">
+      <div class="panel">
+        <div class="panel-title">
+          <span>Transaction History</span>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="inv-txn-acct-filter" onchange="renderInvTransactions()">
+              <option value="all">All Accounts</option>
+            </select>
+            <select id="inv-txn-type-filter" onchange="renderInvTransactions()">
+              <option value="all">All Types</option>
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+              <option value="dividend">Dividend</option>
+              <option value="deposit">Deposit</option>
+              <option value="withdrawal">Withdrawal</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div id="inv-transactions-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
   <!-- BACKUP & RESTORE PAGE                       -->
   <!-- ═══════════════════════════════════════════ -->
   <div id="page-data-backup" class="page">
@@ -534,7 +637,7 @@
     <div class="grid grid-2">
       <div class="panel">
         <div class="panel-title">Export Data</div>
-        <p style="font-size:.875rem;color:var(--text-light);margin-bottom:16px;">Download all your credit cards, bank accounts, and transactions as a JSON file. Keep this file safe as a backup.</p>
+        <p style="font-size:.875rem;color:var(--text-light);margin-bottom:16px;">Download all your credit cards, bank accounts, investments, and transactions as a JSON file. Keep this file safe as a backup.</p>
         <div id="export-stats" style="font-size:.875rem;margin-bottom:16px;"></div>
         <button class="btn btn-primary" onclick="exportData()">Download Backup</button>
       </div>
@@ -553,7 +656,7 @@
 
     <div class="panel mt-4">
       <div class="panel-title" style="color:var(--danger);">Danger Zone</div>
-      <p style="font-size:.875rem;color:var(--text-light);margin-bottom:16px;">Permanently delete all data from this browser. This cannot be undone unless you have a backup.</p>
+      <p style="font-size:.875rem;color:var(--text-light);margin-bottom:16px;">Permanently delete all data (credit cards, bank accounts, investments) from this browser. This cannot be undone unless you have a backup.</p>
       <button class="btn btn-danger" onclick="clearAllData()">Delete All Data</button>
     </div>
   </div>
@@ -713,6 +816,110 @@
   </div>
 </div>
 
+<!-- Add Investment Account Modal -->
+<div class="modal-overlay" id="modal-add-inv-account">
+  <div class="modal">
+    <h2 id="inv-acct-modal-title">Add Investment Account</h2>
+    <input type="hidden" id="edit-inv-acct-id">
+    <div class="form-group">
+      <label>Account Name</label>
+      <input type="text" id="inv-acct-name" placeholder="e.g. Wealthsimple TFSA">
+    </div>
+    <div class="form-group">
+      <label>Account Type</label>
+      <select id="inv-acct-type">
+        <option value="TFSA">TFSA</option>
+        <option value="RRSP">RRSP</option>
+        <option value="Non-Registered">Non-Registered</option>
+        <option value="RESP">RESP</option>
+        <option value="FHSA">FHSA</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-inv-account')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveInvAccount()">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Holding Modal -->
+<div class="modal-overlay" id="modal-add-holding">
+  <div class="modal">
+    <h2 id="holding-modal-title">Add Holding</h2>
+    <input type="hidden" id="edit-holding-id">
+    <div class="form-group">
+      <label>Account</label>
+      <select id="holding-account"></select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Ticker / Symbol</label>
+        <input type="text" id="holding-ticker" placeholder="e.g. XEQT">
+      </div>
+      <div class="form-group">
+        <label>Name (optional)</label>
+        <input type="text" id="holding-name" placeholder="e.g. iShares All-Equity ETF">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Quantity</label>
+        <input type="number" step="0.0001" id="holding-qty" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Average Cost (CAD)</label>
+        <input type="number" step="0.01" id="holding-avg-cost" placeholder="0.00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Current Price (CAD)</label>
+      <input type="number" step="0.01" id="holding-current-price" placeholder="0.00">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-holding')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHolding()">Save Holding</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload CSV for Investment Account -->
+<div class="modal-overlay" id="modal-upload-inv">
+  <div class="modal">
+    <h2>Upload Wealthsimple Transactions</h2>
+    <p class="text-muted mb-4" id="upload-inv-acct-name"></p>
+    <input type="hidden" id="upload-inv-acct-id">
+    <div class="upload-area">
+      <input type="file" accept=".csv" id="inv-file-input" multiple onchange="handleInvFileSelect(event)">
+      <div class="upload-icon">&#128196;</div>
+      <p>Click or drag Wealthsimple CSV export here</p>
+      <p class="text-muted mt-2" style="font-size:.75rem;">Expected: Date, Type, Symbol, Description, Quantity, Price, Amount</p>
+    </div>
+    <div id="inv-upload-preview" class="mt-4" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-upload-inv')">Cancel</button>
+      <button class="btn btn-primary" id="inv-upload-confirm" onclick="confirmInvUpload()" disabled>Import Transactions</button>
+    </div>
+  </div>
+</div>
+
+<!-- Update Price Modal -->
+<div class="modal-overlay" id="modal-update-price">
+  <div class="modal">
+    <h2>Update Current Price</h2>
+    <p class="text-muted mb-4" id="update-price-ticker"></p>
+    <input type="hidden" id="update-price-holding-id">
+    <div class="form-group">
+      <label>Current Price (CAD)</label>
+      <input type="number" step="0.01" id="update-price-value" placeholder="0.00">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal('modal-update-price')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUpdatedPrice()">Save Price</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Set up PDF.js worker
 if (typeof pdfjsLib !== 'undefined') {
@@ -739,6 +946,14 @@ function persistCCTxn() { saveData('ft_cc_transactions', ccTransactions); }
 function persistBA() { saveData('ft_bank_accounts', bankAccounts); }
 function persistBATxn() { saveData('ft_ba_transactions', baTransactions); }
 
+let invAccounts = loadData('ft_inv_accounts', []);
+let invHoldings = loadData('ft_inv_holdings', []);
+let invTransactions = loadData('ft_inv_transactions', []);
+
+function persistInvAcct() { saveData('ft_inv_accounts', invAccounts); }
+function persistInvHold() { saveData('ft_inv_holdings', invHoldings); }
+function persistInvTxn() { saveData('ft_inv_transactions', invTransactions); }
+
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 // ════════════════════════════════════════════════════════════════
@@ -752,6 +967,7 @@ document.querySelectorAll('.sidebar-nav button').forEach(btn => {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-' + btn.dataset.page).classList.add('active');
     if (btn.dataset.page === 'bank-accounts') refreshBankPage();
+    if (btn.dataset.page === 'investments') refreshInvPage();
   });
 });
 
@@ -771,6 +987,9 @@ document.querySelectorAll('.tab-bar').forEach(bar => {
       if (btn.dataset.tab === 'ba-summary') renderBASummaryTrend();
       if (btn.dataset.tab === 'ba-trend') renderBATrend();
       if (btn.dataset.tab === 'ba-transactions') renderBATxnTrend();
+      if (btn.dataset.tab === 'inv-overview') renderInvOverviewChart();
+      if (btn.dataset.tab === 'inv-holdings') renderInvHoldingsChart();
+      if (btn.dataset.tab === 'inv-performance') renderInvPerformanceChart();
     });
   });
 });
@@ -2446,12 +2665,15 @@ function renderBATxnTrend() {
 
 function exportData() {
   const data = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     creditCards,
     ccTransactions,
     bankAccounts,
-    baTransactions
+    baTransactions,
+    invAccounts,
+    invHoldings,
+    invTransactions
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -2467,7 +2689,7 @@ function exportData() {
 function renderExportStats() {
   const el = document.getElementById('export-stats');
   if (!el) return;
-  el.innerHTML = `<strong>Current data:</strong> ${creditCards.length} credit card${creditCards.length !== 1 ? 's' : ''}, ${ccTransactions.length} CC transaction${ccTransactions.length !== 1 ? 's' : ''}, ${bankAccounts.length} bank account${bankAccounts.length !== 1 ? 's' : ''}, ${baTransactions.length} bank transaction${baTransactions.length !== 1 ? 's' : ''}`;
+  el.innerHTML = `<strong>Current data:</strong> ${creditCards.length} credit card${creditCards.length !== 1 ? 's' : ''}, ${ccTransactions.length} CC transaction${ccTransactions.length !== 1 ? 's' : ''}, ${bankAccounts.length} bank account${bankAccounts.length !== 1 ? 's' : ''}, ${baTransactions.length} bank transaction${baTransactions.length !== 1 ? 's' : ''}, ${invAccounts.length} investment account${invAccounts.length !== 1 ? 's' : ''}, ${invHoldings.length} holding${invHoldings.length !== 1 ? 's' : ''}, ${invTransactions.length} investment transaction${invTransactions.length !== 1 ? 's' : ''}`;
 }
 
 let pendingImportData = null;
@@ -2479,7 +2701,7 @@ function handleImportFile(event) {
   reader.onload = function(e) {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data.creditCards && !data.bankAccounts) {
+      if (!data.creditCards && !data.bankAccounts && !data.invAccounts) {
         document.getElementById('import-preview').innerHTML = '<p class="text-danger">Invalid backup file. No finance data found.</p>';
         document.getElementById('import-preview').style.display = 'block';
         return;
@@ -2489,12 +2711,15 @@ function handleImportFile(event) {
       const ccTxn = (data.ccTransactions || []).length;
       const ba = (data.bankAccounts || []).length;
       const baTxn = (data.baTransactions || []).length;
+      const inv = (data.invAccounts || []).length;
+      const invH = (data.invHoldings || []).length;
+      const invT = (data.invTransactions || []).length;
       const date = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'Unknown';
 
       document.getElementById('import-preview').innerHTML = `
         <div class="panel" style="background:#f0fdf4;border:1px solid #bbf7d0;">
           <p style="font-size:.875rem;margin-bottom:8px;"><strong>Backup from:</strong> ${date}</p>
-          <p style="font-size:.875rem;margin-bottom:12px;">${cc} credit card${cc !== 1 ? 's' : ''}, ${ccTxn} CC transaction${ccTxn !== 1 ? 's' : ''}, ${ba} bank account${ba !== 1 ? 's' : ''}, ${baTxn} bank transaction${baTxn !== 1 ? 's' : ''}</p>
+          <p style="font-size:.875rem;margin-bottom:12px;">${cc} credit card${cc !== 1 ? 's' : ''}, ${ccTxn} CC transaction${ccTxn !== 1 ? 's' : ''}, ${ba} bank account${ba !== 1 ? 's' : ''}, ${baTxn} bank transaction${baTxn !== 1 ? 's' : ''}${inv > 0 ? ', ' + inv + ' investment account' + (inv !== 1 ? 's' : '') + ', ' + invH + ' holding' + (invH !== 1 ? 's' : '') + ', ' + invT + ' investment txn' + (invT !== 1 ? 's' : '') : ''}</p>
           <p class="text-danger" style="font-size:.813rem;margin-bottom:12px;">This will replace all current data.</p>
           <button class="btn btn-primary" onclick="confirmImport()">Restore This Backup</button>
         </div>`;
@@ -2515,8 +2740,12 @@ function confirmImport() {
   ccTransactions = pendingImportData.ccTransactions || [];
   bankAccounts = pendingImportData.bankAccounts || [];
   baTransactions = pendingImportData.baTransactions || [];
+  invAccounts = pendingImportData.invAccounts || [];
+  invHoldings = pendingImportData.invHoldings || [];
+  invTransactions = pendingImportData.invTransactions || [];
 
   persistCC(); persistCCTxn(); persistBA(); persistBATxn();
+  persistInvAcct(); persistInvHold(); persistInvTxn();
   pendingImportData = null;
 
   document.getElementById('import-preview').innerHTML = '<p class="text-success" style="font-size:.875rem;"><strong>Data restored successfully.</strong></p>';
@@ -2524,6 +2753,7 @@ function confirmImport() {
   renderExportStats();
   refreshCCPage();
   refreshBankPage();
+  refreshInvPage();
 }
 
 function clearAllData() {
@@ -2531,12 +2761,930 @@ function clearAllData() {
   if (!confirm('Are you really sure? All credit cards, bank accounts, and transactions will be permanently deleted.')) return;
 
   creditCards = []; ccTransactions = []; bankAccounts = []; baTransactions = [];
+  invAccounts = []; invHoldings = []; invTransactions = [];
   persistCC(); persistCCTxn(); persistBA(); persistBATxn();
+  persistInvAcct(); persistInvHold(); persistInvTxn();
 
   refreshCCPage();
   refreshBankPage();
+  refreshInvPage();
   renderExportStats();
   alert('All data has been deleted.');
+}
+
+// ════════════════════════════════════════════════════════════════
+// INVESTMENT ACCOUNTS — CRUD
+// ════════════════════════════════════════════════════════════════
+
+function openAddInvAccountModal() {
+  document.getElementById('inv-acct-modal-title').textContent = 'Add Investment Account';
+  document.getElementById('edit-inv-acct-id').value = '';
+  document.getElementById('inv-acct-name').value = '';
+  document.getElementById('inv-acct-type').value = 'TFSA';
+  openModal('modal-add-inv-account');
+}
+
+function openEditInvAccountModal(id) {
+  const acct = invAccounts.find(a => a.id === id);
+  if (!acct) return;
+  document.getElementById('inv-acct-modal-title').textContent = 'Edit Investment Account';
+  document.getElementById('edit-inv-acct-id').value = id;
+  document.getElementById('inv-acct-name').value = acct.name;
+  document.getElementById('inv-acct-type').value = acct.type;
+  openModal('modal-add-inv-account');
+}
+
+function saveInvAccount() {
+  const editId = document.getElementById('edit-inv-acct-id').value;
+  const name = document.getElementById('inv-acct-name').value.trim();
+  const type = document.getElementById('inv-acct-type').value;
+  if (!name) return alert('Please enter an account name.');
+
+  if (editId) {
+    const acct = invAccounts.find(a => a.id === editId);
+    Object.assign(acct, { name, type });
+  } else {
+    invAccounts.push({ id: genId(), name, type });
+  }
+  persistInvAcct();
+  closeModal('modal-add-inv-account');
+  refreshInvPage();
+}
+
+function deleteInvAccount(id) {
+  if (!confirm('Delete this account and all its holdings/transactions?')) return;
+  invAccounts = invAccounts.filter(a => a.id !== id);
+  invHoldings = invHoldings.filter(h => h.accountId !== id);
+  invTransactions = invTransactions.filter(t => t.accountId !== id);
+  persistInvAcct(); persistInvHold(); persistInvTxn();
+  refreshInvPage();
+}
+
+// ════════════════════════════════════════════════════════════════
+// INVESTMENT ACCOUNTS — HOLDINGS CRUD
+// ════════════════════════════════════════════════════════════════
+
+function openAddHoldingModal(acctId) {
+  document.getElementById('holding-modal-title').textContent = 'Add Holding';
+  document.getElementById('edit-holding-id').value = '';
+  document.getElementById('holding-ticker').value = '';
+  document.getElementById('holding-name').value = '';
+  document.getElementById('holding-qty').value = '';
+  document.getElementById('holding-avg-cost').value = '';
+  document.getElementById('holding-current-price').value = '';
+  populateInvAcctDropdown('holding-account', acctId);
+  openModal('modal-add-holding');
+}
+
+function openEditHoldingModal(id) {
+  const h = invHoldings.find(x => x.id === id);
+  if (!h) return;
+  document.getElementById('holding-modal-title').textContent = 'Edit Holding';
+  document.getElementById('edit-holding-id').value = id;
+  populateInvAcctDropdown('holding-account', h.accountId);
+  document.getElementById('holding-ticker').value = h.ticker;
+  document.getElementById('holding-name').value = h.name || '';
+  document.getElementById('holding-qty').value = h.quantity;
+  document.getElementById('holding-avg-cost').value = h.avgCost;
+  document.getElementById('holding-current-price').value = h.currentPrice;
+  openModal('modal-add-holding');
+}
+
+function saveHolding() {
+  const editId = document.getElementById('edit-holding-id').value;
+  const accountId = document.getElementById('holding-account').value;
+  const ticker = document.getElementById('holding-ticker').value.trim().toUpperCase();
+  const name = document.getElementById('holding-name').value.trim();
+  const quantity = parseFloat(document.getElementById('holding-qty').value) || 0;
+  const avgCost = parseFloat(document.getElementById('holding-avg-cost').value) || 0;
+  const currentPrice = parseFloat(document.getElementById('holding-current-price').value) || 0;
+  if (!ticker) return alert('Please enter a ticker symbol.');
+  if (!accountId) return alert('Please select an account.');
+
+  if (editId) {
+    const h = invHoldings.find(x => x.id === editId);
+    Object.assign(h, { accountId, ticker, name, quantity, avgCost, currentPrice });
+  } else {
+    invHoldings.push({ id: genId(), accountId, ticker, name, quantity, avgCost, currentPrice });
+  }
+  persistInvHold();
+  closeModal('modal-add-holding');
+  refreshInvPage();
+}
+
+function deleteHolding(id) {
+  if (!confirm('Delete this holding?')) return;
+  invHoldings = invHoldings.filter(h => h.id !== id);
+  persistInvHold();
+  refreshInvPage();
+}
+
+function openUpdatePriceModal(holdingId) {
+  const h = invHoldings.find(x => x.id === holdingId);
+  if (!h) return;
+  document.getElementById('update-price-holding-id').value = holdingId;
+  document.getElementById('update-price-ticker').textContent = h.ticker + (h.name ? ' — ' + h.name : '');
+  document.getElementById('update-price-value').value = h.currentPrice;
+  openModal('modal-update-price');
+}
+
+function saveUpdatedPrice() {
+  const id = document.getElementById('update-price-holding-id').value;
+  const price = parseFloat(document.getElementById('update-price-value').value) || 0;
+  const h = invHoldings.find(x => x.id === id);
+  if (h) {
+    h.currentPrice = price;
+    persistInvHold();
+  }
+  closeModal('modal-update-price');
+  refreshInvPage();
+}
+
+function populateInvAcctDropdown(selectId, selectedId) {
+  const el = document.getElementById(selectId);
+  el.innerHTML = invAccounts.map(a =>
+    `<option value="${a.id}" ${a.id === selectedId ? 'selected' : ''}>${a.name} (${a.type})</option>`
+  ).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// INVESTMENT ACCOUNTS — CSV UPLOAD (Wealthsimple format)
+// ════════════════════════════════════════════════════════════════
+
+let pendingInvTransactions = [];
+
+function openUploadInvModal(acctId) {
+  const acct = invAccounts.find(a => a.id === acctId);
+  document.getElementById('upload-inv-acct-id').value = acctId;
+  document.getElementById('upload-inv-acct-name').textContent = acct.name;
+  document.getElementById('inv-upload-preview').style.display = 'none';
+  document.getElementById('inv-upload-confirm').disabled = true;
+  document.getElementById('inv-file-input').value = '';
+  pendingInvTransactions = [];
+  openModal('modal-upload-inv');
+}
+
+function parseInvCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = splitCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+
+  const dateIdx = headers.findIndex(h => h.includes('date'));
+  const typeIdx = headers.findIndex(h => h === 'type' || h.includes('trans') && h.includes('type'));
+  const symbolIdx = headers.findIndex(h => h.includes('symbol') || h.includes('ticker'));
+  const descIdx = headers.findIndex(h => h.includes('desc'));
+  const qtyIdx = headers.findIndex(h => h.includes('quantity') || h.includes('qty') || h.includes('units'));
+  const priceIdx = headers.findIndex(h => h.includes('price') && !h.includes('amount'));
+  const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('total') || h.includes('value'));
+
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.length < 3) continue;
+
+    const date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
+    const type = typeIdx >= 0 ? cols[typeIdx] : cols[1];
+    const symbol = symbolIdx >= 0 ? cols[symbolIdx] : cols[2];
+    const description = descIdx >= 0 ? cols[descIdx] : cols[3] || '';
+    const quantity = qtyIdx >= 0 ? parseFloat((cols[qtyIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
+    const price = priceIdx >= 0 ? parseFloat((cols[priceIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
+    const amount = amtIdx >= 0 ? parseFloat((cols[amtIdx] || '').replace(/[$,]/g, '')) || 0 : 0;
+
+    if (date && type) {
+      results.push({
+        date: date.trim(),
+        type: categorizeInvTxnType(type.trim()),
+        symbol: symbol.trim().toUpperCase(),
+        description: description.trim(),
+        quantity,
+        price,
+        amount: Math.abs(amount)
+      });
+    }
+  }
+  return results;
+}
+
+function categorizeInvTxnType(type) {
+  const lower = type.toLowerCase();
+  if (lower.includes('buy') || lower.includes('purchase')) return 'buy';
+  if (lower.includes('sell') || lower.includes('sale') || lower.includes('redemption')) return 'sell';
+  if (lower.includes('dividend') || lower.includes('distribution') || lower.includes('drip')) return 'dividend';
+  if (lower.includes('deposit') || lower.includes('contribution') || lower.includes('transfer in') || lower.includes('funding')) return 'deposit';
+  if (lower.includes('withdraw') || lower.includes('transfer out') || lower.includes('defunding')) return 'withdrawal';
+  if (lower.includes('fee') || lower.includes('commission')) return 'fee';
+  return 'other';
+}
+
+async function handleInvFileSelect(event) {
+  const files = Array.from(event.target.files);
+  if (files.length === 0) return;
+
+  document.getElementById('inv-upload-preview').innerHTML = '<p style="font-size:.875rem;">Processing...</p>';
+  document.getElementById('inv-upload-preview').style.display = 'block';
+
+  let allRows = [];
+  for (const file of files) {
+    const text = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsText(file);
+    });
+    allRows = allRows.concat(parseInvCSV(text));
+  }
+
+  const acctId = document.getElementById('upload-inv-acct-id').value;
+  pendingInvTransactions = allRows.map(row => ({
+    id: genId(),
+    accountId: acctId,
+    date: normalizeDate(row.date),
+    type: row.type,
+    symbol: row.symbol,
+    description: row.description,
+    quantity: row.quantity,
+    price: row.price,
+    amount: row.amount
+  })).filter(t => t.date);
+
+  if (pendingInvTransactions.length === 0) {
+    document.getElementById('inv-upload-preview').innerHTML = '<p class="text-danger">No valid transactions found.</p>';
+    return;
+  }
+
+  const typeCounts = {};
+  pendingInvTransactions.forEach(t => { typeCounts[t.type] = (typeCounts[t.type] || 0) + 1; });
+  const summary = Object.entries(typeCounts).map(([k, v]) => v + ' ' + k).join(', ');
+
+  let html = `<p style="font-size:.875rem;margin-bottom:8px;"><strong>${pendingInvTransactions.length}</strong> transactions found (${summary}):</p>`;
+  html += '<div style="max-height:200px;overflow-y:auto;"><table><tr><th>Date</th><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Amount</th></tr>';
+  pendingInvTransactions.slice(0, 20).forEach(t => {
+    const typeBadge = INV_TYPE_COLORS[t.type] || '#94a3b8';
+    html += `<tr><td>${t.date}</td><td><span class="badge" style="background:${typeBadge}20;color:${typeBadge};">${t.type}</span></td><td><strong>${t.symbol || '—'}</strong></td><td>${t.quantity || '—'}</td><td>${t.price ? '$' + t.price.toFixed(2) : '—'}</td><td>$${t.amount.toFixed(2)}</td></tr>`;
+  });
+  if (pendingInvTransactions.length > 20) html += `<tr><td colspan="6" class="text-muted">...and ${pendingInvTransactions.length - 20} more</td></tr>`;
+  html += '</table></div>';
+  document.getElementById('inv-upload-preview').innerHTML = html;
+  document.getElementById('inv-upload-preview').style.display = 'block';
+  document.getElementById('inv-upload-confirm').disabled = false;
+}
+
+function confirmInvUpload() {
+  invTransactions = invTransactions.concat(pendingInvTransactions);
+  persistInvTxn();
+
+  // Auto-create/update holdings from buy transactions
+  const acctId = document.getElementById('upload-inv-acct-id').value;
+  autoUpdateHoldings(acctId);
+
+  pendingInvTransactions = [];
+  closeModal('modal-upload-inv');
+  refreshInvPage();
+}
+
+function autoUpdateHoldings(acctId) {
+  // Group all buy/sell transactions by symbol for this account
+  const acctTxns = invTransactions.filter(t => t.accountId === acctId && t.symbol);
+  const symbols = [...new Set(acctTxns.filter(t => t.type === 'buy' || t.type === 'sell').map(t => t.symbol))];
+
+  symbols.forEach(symbol => {
+    const buys = acctTxns.filter(t => t.symbol === symbol && t.type === 'buy');
+    const sells = acctTxns.filter(t => t.symbol === symbol && t.type === 'sell');
+
+    const totalBuyQty = buys.reduce((s, t) => s + t.quantity, 0);
+    const totalSellQty = sells.reduce((s, t) => s + t.quantity, 0);
+    const netQty = totalBuyQty - totalSellQty;
+
+    if (netQty <= 0) return; // fully sold
+
+    const totalBuyCost = buys.reduce((s, t) => s + (t.quantity * t.price), 0);
+    const avgCost = totalBuyCost / totalBuyQty;
+
+    // Find or create holding
+    let holding = invHoldings.find(h => h.accountId === acctId && h.ticker === symbol);
+    if (holding) {
+      holding.quantity = netQty;
+      holding.avgCost = avgCost;
+      // Keep current price if already set, otherwise use latest buy price
+      if (!holding.currentPrice) holding.currentPrice = buys[buys.length - 1].price;
+    } else {
+      invHoldings.push({
+        id: genId(), accountId: acctId, ticker: symbol,
+        name: '', quantity: netQty, avgCost: avgCost,
+        currentPrice: buys[buys.length - 1].price
+      });
+    }
+  });
+  persistInvHold();
+}
+
+const INV_TYPE_COLORS = {
+  'buy': '#2563eb', 'sell': '#ef4444', 'dividend': '#22c55e',
+  'deposit': '#8b5cf6', 'withdrawal': '#f59e0b', 'fee': '#64748b', 'other': '#94a3b8'
+};
+
+// ════════════════════════════════════════════════════════════════
+// INVESTMENT ACCOUNTS — RENDERING
+// ════════════════════════════════════════════════════════════════
+
+function refreshInvPage() {
+  renderInvOverview();
+  populateInvFilters();
+  renderInvHoldings();
+  renderInvTransactions();
+  renderInvOverviewChart();
+  renderInvHoldingsChart();
+  renderInvPerformanceChart();
+}
+
+function populateInvFilters() {
+  const acctOpts = '<option value="all">All Accounts</option>' + invAccounts.map(a => `<option value="${a.id}">${a.name} (${a.type})</option>`).join('');
+  ['inv-overview-acct-filter', 'inv-holdings-acct-filter', 'inv-txn-acct-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    const prev = el.value;
+    el.innerHTML = acctOpts;
+    if (prev && el.querySelector(`option[value="${prev}"]`)) el.value = prev;
+  });
+
+  // Populate holdings ticker filter
+  const tickers = [...new Set(invHoldings.map(h => h.ticker))].sort();
+  const tickerOpts = '<option value="all">All Holdings</option>' + tickers.map(t => `<option value="${t}">${t}</option>`).join('');
+  const tickerEl = document.getElementById('inv-holdings-ticker-filter');
+  const prevTicker = tickerEl.value;
+  tickerEl.innerHTML = tickerOpts;
+  if (prevTicker && tickerEl.querySelector(`option[value="${prevTicker}"]`)) tickerEl.value = prevTicker;
+}
+
+function renderInvOverview() {
+  const container = document.getElementById('inv-overview-cards');
+
+  if (invAccounts.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128200;</div><p>No investment accounts yet. Click "Add Account" to get started.</p></div>';
+    return;
+  }
+
+  let totalValue = 0, totalCost = 0;
+  const acctData = invAccounts.map(acct => {
+    const holdings = invHoldings.filter(h => h.accountId === acct.id);
+    const value = holdings.reduce((s, h) => s + h.quantity * h.currentPrice, 0);
+    const cost = holdings.reduce((s, h) => s + h.quantity * h.avgCost, 0);
+    const gain = value - cost;
+    const gainPct = cost > 0 ? (gain / cost * 100) : 0;
+    totalValue += value;
+    totalCost += cost;
+    return { ...acct, value, cost, gain, gainPct, holdingCount: holdings.length };
+  });
+
+  const totalGain = totalValue - totalCost;
+  const totalGainPct = totalCost > 0 ? (totalGain / totalCost * 100) : 0;
+
+  let html = `<div class="grid grid-3" style="margin-bottom:16px;">
+    <div class="stat-card" style="border-left:4px solid var(--accent);">
+      <div class="label">Total Portfolio Value</div>
+      <div class="value">$${totalValue.toFixed(2)}</div>
+      <div class="sub">Cost basis: $${totalCost.toFixed(2)}</div>
+    </div>
+    <div class="stat-card" style="border-left:4px solid ${totalGain >= 0 ? 'var(--success)' : 'var(--danger)'};">
+      <div class="label">Total Gain/Loss</div>
+      <div class="value ${totalGain >= 0 ? 'text-success' : 'text-danger'}">${totalGain >= 0 ? '+' : ''}$${totalGain.toFixed(2)}</div>
+      <div class="sub ${totalGain >= 0 ? 'text-success' : 'text-danger'}">${totalGainPct >= 0 ? '+' : ''}${totalGainPct.toFixed(2)}%</div>
+    </div>
+    <div class="stat-card" style="border-left:4px solid var(--warning);">
+      <div class="label">Accounts</div>
+      <div class="value">${invAccounts.length}</div>
+      <div class="sub">${invHoldings.length} holding${invHoldings.length !== 1 ? 's' : ''} total</div>
+    </div>
+  </div>`;
+
+  html += '<div class="grid grid-3">';
+  acctData.forEach(acct => {
+    html += `<div class="stat-card due-ok">
+      <div class="label">${acct.name} <span class="text-muted">(${acct.type})</span></div>
+      <div class="value">$${acct.value.toFixed(2)}</div>
+      <div class="sub">Cost: $${acct.cost.toFixed(2)} &middot; <span class="${acct.gain >= 0 ? 'text-success' : 'text-danger'}">${acct.gain >= 0 ? '+' : ''}$${acct.gain.toFixed(2)} (${acct.gainPct >= 0 ? '+' : ''}${acct.gainPct.toFixed(2)}%)</span></div>
+      <div class="mt-2" style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-sm btn-primary" onclick="openUploadInvModal('${acct.id}')">Upload CSV</button>
+        <button class="btn btn-sm btn-secondary" onclick="openAddHoldingModal('${acct.id}')">Add Holding</button>
+        <button class="btn btn-sm btn-secondary" onclick="openEditInvAccountModal('${acct.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteInvAccount('${acct.id}')">Delete</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+function renderInvHoldings() {
+  const acctFilter = document.getElementById('inv-holdings-acct-filter').value;
+  let holdings = [...invHoldings];
+  if (acctFilter !== 'all') holdings = holdings.filter(h => h.accountId === acctFilter);
+
+  const container = document.getElementById('inv-holdings-content');
+  if (holdings.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128176;</div><p>No holdings yet. Add holdings manually or upload a Wealthsimple CSV.</p></div>';
+    return;
+  }
+
+  // Group by account
+  const grouped = {};
+  holdings.forEach(h => {
+    if (!grouped[h.accountId]) grouped[h.accountId] = [];
+    grouped[h.accountId].push(h);
+  });
+
+  let html = '';
+  Object.entries(grouped).forEach(([acctId, acctHoldings]) => {
+    const acct = invAccounts.find(a => a.id === acctId);
+    const acctName = acct ? acct.name + ' (' + acct.type + ')' : 'Unknown';
+    const acctValue = acctHoldings.reduce((s, h) => s + h.quantity * h.currentPrice, 0);
+    const acctCost = acctHoldings.reduce((s, h) => s + h.quantity * h.avgCost, 0);
+    const acctGain = acctValue - acctCost;
+    const acctGainPct = acctCost > 0 ? (acctGain / acctCost * 100) : 0;
+
+    html += `<div style="margin-bottom:24px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="font-size:1rem;">${acctName}</h3>
+        <div style="font-size:.875rem;">
+          Value: <strong>$${acctValue.toFixed(2)}</strong> &middot;
+          <span class="${acctGain >= 0 ? 'text-success' : 'text-danger'}">${acctGain >= 0 ? '+' : ''}$${acctGain.toFixed(2)} (${acctGainPct >= 0 ? '+' : ''}${acctGainPct.toFixed(2)}%)</span>
+        </div>
+      </div>
+      <table>
+        <tr>
+          <th>Ticker</th><th>Name</th><th style="text-align:right;">Qty</th>
+          <th style="text-align:right;">Avg Cost</th><th style="text-align:right;">Current Price</th>
+          <th style="text-align:right;">Market Value</th><th style="text-align:right;">Gain/Loss</th><th></th>
+        </tr>`;
+
+    acctHoldings.sort((a, b) => (b.quantity * b.currentPrice) - (a.quantity * a.currentPrice));
+    acctHoldings.forEach(h => {
+      const mktVal = h.quantity * h.currentPrice;
+      const costBasis = h.quantity * h.avgCost;
+      const gl = mktVal - costBasis;
+      const glPct = costBasis > 0 ? (gl / costBasis * 100) : 0;
+      const cls = gl >= 0 ? 'text-success' : 'text-danger';
+      const sign = gl >= 0 ? '+' : '';
+
+      html += `<tr>
+        <td><strong>${h.ticker}</strong></td>
+        <td>${h.name || '—'}</td>
+        <td style="text-align:right;">${h.quantity.toFixed(4).replace(/\.?0+$/, '')}</td>
+        <td style="text-align:right;">$${h.avgCost.toFixed(2)}</td>
+        <td style="text-align:right;">$${h.currentPrice.toFixed(2)}</td>
+        <td style="text-align:right;"><strong>$${mktVal.toFixed(2)}</strong></td>
+        <td style="text-align:right;" class="${cls}">${sign}$${gl.toFixed(2)}<br><span style="font-size:.75rem;">${sign}${glPct.toFixed(2)}%</span></td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm btn-secondary" onclick="openUpdatePriceModal('${h.id}')" title="Update price">&#128196;</button>
+          <button class="btn btn-sm btn-secondary" onclick="openEditHoldingModal('${h.id}')" title="Edit">&#9998;</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteHolding('${h.id}')" title="Delete">&times;</button>
+        </td>
+      </tr>`;
+    });
+
+    html += '</table></div>';
+  });
+
+  container.innerHTML = html;
+}
+
+let invTxnSort = { field: 'date', dir: 'desc' };
+
+function sortInvTransactions(field) {
+  if (invTxnSort.field === field) {
+    invTxnSort.dir = invTxnSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    invTxnSort.field = field;
+    invTxnSort.dir = field === 'amount' || field === 'price' || field === 'quantity' ? 'desc' : 'asc';
+  }
+  renderInvTransactions();
+}
+
+function renderInvTransactions() {
+  const acctFilter = document.getElementById('inv-txn-acct-filter').value;
+  const typeFilter = document.getElementById('inv-txn-type-filter').value;
+
+  let txns = [...invTransactions];
+  if (acctFilter !== 'all') txns = txns.filter(t => t.accountId === acctFilter);
+  if (typeFilter !== 'all') txns = txns.filter(t => t.type === typeFilter);
+
+  const acctNameMap = {};
+  invAccounts.forEach(a => { acctNameMap[a.id] = a.name; });
+
+  txns.sort((a, b) => {
+    let cmp = 0;
+    switch (invTxnSort.field) {
+      case 'date': cmp = a.date.localeCompare(b.date); break;
+      case 'account': cmp = (acctNameMap[a.accountId] || '').localeCompare(acctNameMap[b.accountId] || ''); break;
+      case 'type': cmp = a.type.localeCompare(b.type); break;
+      case 'symbol': cmp = (a.symbol || '').localeCompare(b.symbol || ''); break;
+      case 'quantity': cmp = a.quantity - b.quantity; break;
+      case 'price': cmp = a.price - b.price; break;
+      case 'amount': cmp = a.amount - b.amount; break;
+    }
+    return invTxnSort.dir === 'asc' ? cmp : -cmp;
+  });
+
+  const container = document.getElementById('inv-transactions-table');
+  if (txns.length === 0) {
+    container.innerHTML = '<p class="text-muted" style="padding:20px;text-align:center;">No transactions found. Upload a Wealthsimple CSV to import transactions.</p>';
+    return;
+  }
+
+  const sf = invTxnSort.field;
+  const sd = invTxnSort.dir;
+  const sortCls = (f) => f === sf ? (sd === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
+
+  let html = '<div style="max-height:500px;overflow-y:auto;"><table><tr>';
+  html += `<th class="${sortCls('date')}" onclick="sortInvTransactions('date')">Date</th>`;
+  html += `<th class="${sortCls('account')}" onclick="sortInvTransactions('account')">Account</th>`;
+  html += `<th class="${sortCls('type')}" onclick="sortInvTransactions('type')">Type</th>`;
+  html += `<th class="${sortCls('symbol')}" onclick="sortInvTransactions('symbol')">Symbol</th>`;
+  html += '<th>Description</th>';
+  html += `<th class="${sortCls('quantity')}" onclick="sortInvTransactions('quantity')" style="text-align:right;">Qty</th>`;
+  html += `<th class="${sortCls('price')}" onclick="sortInvTransactions('price')" style="text-align:right;">Price</th>`;
+  html += `<th class="${sortCls('amount')}" onclick="sortInvTransactions('amount')" style="text-align:right;">Amount</th>`;
+  html += '</tr>';
+
+  txns.forEach(t => {
+    const acctName = acctNameMap[t.accountId] || 'Unknown';
+    const typeColor = INV_TYPE_COLORS[t.type] || '#94a3b8';
+    html += `<tr>
+      <td>${t.date}</td>
+      <td>${acctName}</td>
+      <td><span class="badge" style="background:${typeColor}20;color:${typeColor};">${t.type}</span></td>
+      <td><strong>${t.symbol || '—'}</strong></td>
+      <td>${t.description || '—'}</td>
+      <td style="text-align:right;">${t.quantity || '—'}</td>
+      <td style="text-align:right;">${t.price ? '$' + t.price.toFixed(2) : '—'}</td>
+      <td style="text-align:right;">$${t.amount.toFixed(2)}</td>
+    </tr>`;
+  });
+  html += '</table></div>';
+  container.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════════
+// INVESTMENT ACCOUNTS — CHARTS
+// ════════════════════════════════════════════════════════════════
+
+const INV_ACCT_COLORS = ['#2563eb', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899'];
+
+function getInvMonthlyValues() {
+  // Build monthly portfolio snapshots from transactions
+  // For each month, calculate cumulative holdings and their value
+  const allTxns = [...invTransactions].sort((a, b) => a.date.localeCompare(b.date));
+  if (allTxns.length === 0) return { months: [], acctValues: {} };
+
+  const months = new Set();
+  allTxns.forEach(t => months.add(t.date.slice(0, 7)));
+  const sortedMonths = Array.from(months).sort();
+
+  // Track cumulative holdings per account per symbol
+  const acctHoldings = {}; // acctId -> { symbol -> { qty, totalCost } }
+
+  // Current prices from holdings
+  const currentPrices = {};
+  invHoldings.forEach(h => { currentPrices[h.ticker] = h.currentPrice; });
+
+  const acctValues = {}; // acctId -> [{ month, value, cost }]
+  invAccounts.forEach(a => { acctValues[a.id] = []; acctHoldings[a.id] = {}; });
+
+  let txnIdx = 0;
+  sortedMonths.forEach(month => {
+    // Process all transactions up to this month
+    while (txnIdx < allTxns.length && allTxns[txnIdx].date.slice(0, 7) <= month) {
+      const t = allTxns[txnIdx];
+      if (!acctHoldings[t.accountId]) acctHoldings[t.accountId] = {};
+      const ah = acctHoldings[t.accountId];
+
+      if (t.type === 'buy' && t.symbol) {
+        if (!ah[t.symbol]) ah[t.symbol] = { qty: 0, totalCost: 0 };
+        ah[t.symbol].qty += t.quantity;
+        ah[t.symbol].totalCost += t.quantity * t.price;
+      } else if (t.type === 'sell' && t.symbol && ah[t.symbol]) {
+        const avgCost = ah[t.symbol].qty > 0 ? ah[t.symbol].totalCost / ah[t.symbol].qty : 0;
+        ah[t.symbol].qty -= t.quantity;
+        ah[t.symbol].totalCost = ah[t.symbol].qty * avgCost;
+        if (ah[t.symbol].qty <= 0) { ah[t.symbol].qty = 0; ah[t.symbol].totalCost = 0; }
+      }
+      txnIdx++;
+    }
+
+    // Snapshot each account's value for this month
+    invAccounts.forEach(acct => {
+      const ah = acctHoldings[acct.id] || {};
+      let value = 0, cost = 0;
+      Object.entries(ah).forEach(([symbol, pos]) => {
+        if (pos.qty > 0) {
+          const price = currentPrices[symbol] || 0;
+          value += pos.qty * price;
+          cost += pos.totalCost;
+        }
+      });
+      acctValues[acct.id].push({ month, value, cost });
+    });
+  });
+
+  return { months: sortedMonths, acctValues };
+}
+
+function renderInvOverviewChart() {
+  const canvas = document.getElementById('inv-overview-chart');
+  const ctx = canvas.getContext('2d');
+  const legendEl = document.getElementById('inv-overview-legend');
+  const acctFilter = document.getElementById('inv-overview-acct-filter').value;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const pad = { top: 20, right: 20, bottom: 40, left: 70 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, W, H);
+  chartDataPoints['inv-overview-chart'] = [];
+
+  const { months, acctValues } = getInvMonthlyValues();
+
+  // Build combined or filtered values
+  let datasets = [];
+  if (acctFilter === 'all') {
+    // Show total value line + P/L
+    const totalValues = months.map((m, i) => {
+      let v = 0, c = 0;
+      invAccounts.forEach(a => {
+        const d = acctValues[a.id][i];
+        if (d) { v += d.value; c += d.cost; }
+      });
+      return { month: m, value: v, cost: c, pl: v - c };
+    });
+    datasets.push({ label: 'Total Value', data: totalValues, color: '#2563eb' });
+    datasets.push({ label: 'Cost Basis', data: totalValues.map(d => ({ ...d, value: d.cost })), color: '#94a3b8' });
+  } else {
+    const d = acctValues[acctFilter] || [];
+    const acct = invAccounts.find(a => a.id === acctFilter);
+    const name = acct ? acct.name : 'Account';
+    datasets.push({ label: name + ' Value', data: d.map(x => ({ ...x, pl: x.value - x.cost })), color: '#2563eb' });
+    datasets.push({ label: 'Cost Basis', data: d.map(x => ({ ...x, value: x.cost })), color: '#94a3b8' });
+  }
+
+  if (months.length === 0) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('No transaction data. Upload statements to see portfolio value over time.', W / 2, H / 2);
+    legendEl.innerHTML = '';
+    setupChartHover(canvas);
+    return;
+  }
+
+  let maxVal = 0;
+  datasets.forEach(ds => ds.data.forEach(d => { if (d.value > maxVal) maxVal = d.value; }));
+  maxVal = maxVal * 1.1 || 1;
+
+  const getX = i => pad.left + (i / (months.length - 1 || 1)) * chartW;
+  const getY = v => pad.top + chartH - (v / maxVal) * chartH;
+
+  // Grid
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (i / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = maxVal - (i / 4) * maxVal;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
+  }
+
+  // Draw lines
+  datasets.forEach(ds => {
+    ctx.beginPath(); ctx.strokeStyle = ds.color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ds.data.forEach((d, i) => {
+      const x = getX(i), y = getY(d.value);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      const tooltipLabel = ds.label + (d.pl !== undefined ? ' | P/L: ' + (d.pl >= 0 ? '+' : '') + '$' + d.pl.toFixed(2) : '');
+      chartDataPoints['inv-overview-chart'].push({ x, y, value: d.value, label: tooltipLabel, color: ds.color, month: formatMonth(d.month) });
+    });
+    ctx.stroke();
+    ds.data.forEach((d, i) => {
+      if (d.value > 0) {
+        ctx.beginPath(); ctx.arc(getX(i), getY(d.value), 3, 0, Math.PI * 2);
+        ctx.fillStyle = ds.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    });
+  });
+
+  // Fill area under value line
+  if (datasets[0] && datasets[0].data.length > 0) {
+    ctx.beginPath();
+    datasets[0].data.forEach((d, i) => {
+      const x = getX(i), y = getY(d.value);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(getX(datasets[0].data.length - 1), pad.top + chartH);
+    ctx.lineTo(getX(0), pad.top + chartH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(37,99,235,.08)';
+    ctx.fill();
+  }
+
+  // X labels
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  months.forEach((m, i) => { ctx.fillText(formatMonth(m), getX(i), H - pad.bottom + 20); });
+
+  legendEl.innerHTML = datasets.map(ds =>
+    `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${ds.color}"></div>${ds.label}</div>`
+  ).join('');
+
+  setupChartHover(canvas);
+}
+
+function renderInvHoldingsChart() {
+  const canvas = document.getElementById('inv-holdings-chart');
+  const ctx = canvas.getContext('2d');
+  const legendEl = document.getElementById('inv-holdings-legend');
+  const tickerFilter = document.getElementById('inv-holdings-ticker-filter').value;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const pad = { top: 20, right: 20, bottom: 40, left: 70 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, W, H);
+  chartDataPoints['inv-holdings-chart'] = [];
+
+  // Build monthly value per ticker
+  const allTxns = [...invTransactions].sort((a, b) => a.date.localeCompare(b.date));
+  const months = [...new Set(allTxns.map(t => t.date.slice(0, 7)))].sort();
+  const currentPrices = {};
+  invHoldings.forEach(h => { currentPrices[h.ticker] = h.currentPrice; });
+
+  const targetTickers = tickerFilter !== 'all' ? [tickerFilter] : [...new Set(invHoldings.map(h => h.ticker))];
+  const tickerPos = {};
+  targetTickers.forEach(t => { tickerPos[t] = { qty: 0, totalCost: 0 }; });
+
+  const tickerMonthly = {};
+  targetTickers.forEach(t => { tickerMonthly[t] = []; });
+
+  let txnIdx = 0;
+  months.forEach(month => {
+    while (txnIdx < allTxns.length && allTxns[txnIdx].date.slice(0, 7) <= month) {
+      const t = allTxns[txnIdx];
+      if (t.symbol && tickerPos[t.symbol] !== undefined) {
+        if (t.type === 'buy') {
+          tickerPos[t.symbol].qty += t.quantity;
+          tickerPos[t.symbol].totalCost += t.quantity * t.price;
+        } else if (t.type === 'sell') {
+          const avg = tickerPos[t.symbol].qty > 0 ? tickerPos[t.symbol].totalCost / tickerPos[t.symbol].qty : 0;
+          tickerPos[t.symbol].qty -= t.quantity;
+          tickerPos[t.symbol].totalCost = tickerPos[t.symbol].qty * avg;
+          if (tickerPos[t.symbol].qty < 0) { tickerPos[t.symbol].qty = 0; tickerPos[t.symbol].totalCost = 0; }
+        }
+      }
+      txnIdx++;
+    }
+    targetTickers.forEach(ticker => {
+      const price = currentPrices[ticker] || 0;
+      const value = tickerPos[ticker].qty * price;
+      const cost = tickerPos[ticker].totalCost;
+      tickerMonthly[ticker].push({ month, value, cost, pl: value - cost });
+    });
+  });
+
+  if (months.length === 0 || targetTickers.length === 0) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('No data available.', W / 2, H / 2);
+    legendEl.innerHTML = '';
+    setupChartHover(canvas);
+    return;
+  }
+
+  let maxVal = 0;
+  targetTickers.forEach(ticker => {
+    tickerMonthly[ticker].forEach(d => { if (d.value > maxVal) maxVal = d.value; });
+  });
+  maxVal = maxVal * 1.1 || 1;
+
+  const getX = i => pad.left + (i / (months.length - 1 || 1)) * chartW;
+  const getY = v => pad.top + chartH - (v / maxVal) * chartH;
+
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (i / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = maxVal - (i / 4) * maxVal;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
+  }
+
+  const holdingColors = ['#2563eb', '#22c55e', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+  targetTickers.forEach((ticker, ti) => {
+    const color = holdingColors[ti % holdingColors.length];
+    const data = tickerMonthly[ticker];
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    data.forEach((d, i) => {
+      const x = getX(i), y = getY(d.value);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      const plLabel = ' | P/L: ' + (d.pl >= 0 ? '+' : '') + '$' + d.pl.toFixed(2);
+      chartDataPoints['inv-holdings-chart'].push({ x, y, value: d.value, label: ticker + plLabel, color, month: formatMonth(d.month) });
+    });
+    ctx.stroke();
+    data.forEach((d, i) => {
+      if (d.value > 0) {
+        ctx.beginPath(); ctx.arc(getX(i), getY(d.value), 3, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    });
+  });
+
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  months.forEach((m, i) => { ctx.fillText(formatMonth(m), getX(i), H - pad.bottom + 20); });
+
+  legendEl.innerHTML = targetTickers.map((t, i) =>
+    `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${holdingColors[i % holdingColors.length]}"></div>${t}</div>`
+  ).join('');
+
+  setupChartHover(canvas);
+}
+
+function renderInvPerformanceChart() {
+  const canvas = document.getElementById('inv-performance-chart');
+  const ctx = canvas.getContext('2d');
+  const legendEl = document.getElementById('inv-performance-legend');
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  const pad = { top: 20, right: 20, bottom: 40, left: 70 };
+  const chartW = W - pad.left - pad.right;
+  const chartH = H - pad.top - pad.bottom;
+  ctx.clearRect(0, 0, W, H);
+  chartDataPoints['inv-performance-chart'] = [];
+
+  const { months, acctValues } = getInvMonthlyValues();
+
+  if (months.length === 0) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('No data available. Upload statements to see performance.', W / 2, H / 2);
+    legendEl.innerHTML = '';
+    setupChartHover(canvas);
+    return;
+  }
+
+  let maxVal = 0;
+  invAccounts.forEach(a => {
+    (acctValues[a.id] || []).forEach(d => { if (d.value > maxVal) maxVal = d.value; });
+  });
+  maxVal = maxVal * 1.1 || 1;
+
+  const getX = i => pad.left + (i / (months.length - 1 || 1)) * chartW;
+  const getY = v => pad.top + chartH - (v / maxVal) * chartH;
+
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (i / 4) * chartH;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    const val = maxVal - (i / 4) * maxVal;
+    ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('$' + val.toFixed(0), pad.left - 8, y + 4);
+  }
+
+  invAccounts.forEach((acct, ai) => {
+    const color = INV_ACCT_COLORS[ai % INV_ACCT_COLORS.length];
+    const data = acctValues[acct.id] || [];
+    if (data.length === 0) return;
+
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+    data.forEach((d, i) => {
+      const x = getX(i), y = getY(d.value);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      const pl = d.value - d.cost;
+      const plLabel = ' | P/L: ' + (pl >= 0 ? '+' : '') + '$' + pl.toFixed(2);
+      chartDataPoints['inv-performance-chart'].push({ x, y, value: d.value, label: acct.name + ' (' + acct.type + ')' + plLabel, color, month: formatMonth(d.month) });
+    });
+    ctx.stroke();
+    data.forEach((d, i) => {
+      if (d.value > 0) {
+        ctx.beginPath(); ctx.arc(getX(i), getY(d.value), 4, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+      }
+    });
+  });
+
+  ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  months.forEach((m, i) => { ctx.fillText(formatMonth(m), getX(i), H - pad.bottom + 20); });
+
+  legendEl.innerHTML = invAccounts.map((a, i) =>
+    `<div class="chart-legend-item"><div class="chart-legend-dot" style="background:${INV_ACCT_COLORS[i % INV_ACCT_COLORS.length]}"></div>${a.name} (${a.type})</div>`
+  ).join('');
+
+  setupChartHover(canvas);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2584,6 +3732,7 @@ function clearAllData() {
 
 refreshCCPage();
 refreshBankPage();
+refreshInvPage();
 renderExportStats();
 
 // Redraw chart on resize
@@ -2594,6 +3743,9 @@ window.addEventListener('resize', () => {
   renderTxnTrendChart();
   renderBASummaryTrend();
   renderBATxnTrend();
+  renderInvOverviewChart();
+  renderInvHoldingsChart();
+  renderInvPerformanceChart();
 });
 </script>
 
