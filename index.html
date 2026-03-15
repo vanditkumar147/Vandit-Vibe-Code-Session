@@ -7,27 +7,27 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root {
-    --bg: #f4f6f9;
-    --sidebar-bg: #1e293b;
-    --sidebar-hover: #334155;
+    --bg: #f0f4f8;
+    --sidebar-bg: #1e3a5f;
+    --sidebar-hover: #2a4d72;
     --sidebar-active: #3b82f6;
     --card-bg: #ffffff;
-    --text: #1e293b;
+    --text: #334155;
     --text-light: #64748b;
     --border: #e2e8f0;
-    --accent: #3b82f6;
-    --accent-hover: #2563eb;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
     --danger: #ef4444;
     --success: #22c55e;
     --warning: #f59e0b;
-    --radius: 10px;
-    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
   }
 
   * { margin:0; padding:0; box-sizing:border-box; }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
     display: flex;
@@ -51,9 +51,9 @@
     font-size: 1.25rem;
     font-weight: 700;
     letter-spacing: -.5px;
-    border-bottom: 1px solid rgba(255,255,255,.1);
+    border-bottom: 1px solid rgba(255,255,255,.12);
   }
-  .sidebar-brand span { color: var(--accent); }
+  .sidebar-brand span { color: #93c5fd; }
   .sidebar-nav { flex: 1; padding: 12px 0; }
   .sidebar-nav button {
     display: flex; align-items: center; gap: 12px;
@@ -62,8 +62,8 @@
     font-size: .938rem; cursor: pointer;
     transition: all .15s;
   }
-  .sidebar-nav button:hover { background: var(--sidebar-hover); color: #fff; }
-  .sidebar-nav button.active { background: var(--sidebar-active); color: #fff; border-radius: 0; }
+  .sidebar-nav button:hover { background: var(--sidebar-hover); color: #e2e8f0; }
+  .sidebar-nav button.active { background: var(--sidebar-active); color: #fff; border-radius: 8px; margin: 0 8px; width: calc(100% - 16px); }
   .sidebar-nav button svg { width: 20px; height: 20px; flex-shrink: 0; }
 
   /* ── Main ── */
@@ -105,7 +105,7 @@
   .stat-card .label { font-size: .813rem; color: var(--text-light); margin-bottom: 4px; }
   .stat-card .value { font-size: 1.5rem; font-weight: 700; }
   .stat-card .sub { font-size: .813rem; color: var(--text-light); margin-top: 4px; }
-  .stat-card.due-soon { border-left: 4px solid var(--danger); }
+  .stat-card.due-soon { border-left: 4px solid var(--danger); background: #fef2f2; }
   .stat-card.due-ok { border-left: 4px solid var(--success); }
 
   /* ── Buttons ── */
@@ -131,7 +131,7 @@
     border-radius: 6px; font-size: .875rem; background: #fff;
   }
   .form-group input:focus, .form-group select:focus {
-    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.15);
   }
   .form-row { display: flex; gap: 12px; }
   .form-row .form-group { flex: 1; }
@@ -174,6 +174,11 @@
   .badge-refund { background: #d1fae5; color: #065f46; }
   .badge-income { background: #d1fae5; color: #065f46; }
   .badge-expense { background: #fecaca; color: #991b1b; }
+  .badge-interest { background: #d1fae5; color: #065f46; }
+  .badge-bill { background: #ffedd5; color: #9a3412; }
+  .badge-transferin { background: #dbeafe; color: #1e40af; }
+  .badge-transferout { background: #ede9fe; color: #5b21b6; }
+  .badge-withdrawal { background: #fce7f3; color: #9d174d; }
 
   .category-colors {
     --eating: #f59e0b; --groceries: #22c55e; --travel: #3b82f6;
@@ -197,7 +202,7 @@
     padding: 32px; text-align: center; cursor: pointer;
     transition: all .15s; position: relative;
   }
-  .upload-area:hover { border-color: var(--accent); background: #f0f5ff; }
+  .upload-area:hover { border-color: var(--accent); background: #eff6ff; }
   .upload-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   .upload-area p { color: var(--text-light); font-size: .875rem; }
   .upload-area .upload-icon { font-size: 2rem; margin-bottom: 8px; color: var(--accent); }
@@ -446,6 +451,7 @@
           </div>
         </div>
         <div id="ba-summary-content"></div>
+        <div id="ba-summary-drilldown"></div>
         <div id="ba-summary-empty" class="empty-state" style="display:none;">
           <div class="empty-icon">&#128176;</div>
           <p>No transactions yet. Upload a CSV statement to see cash flow data.</p>
@@ -457,12 +463,21 @@
           <select id="ba-summary-trend-filter" onchange="renderBASummaryTrend()">
             <option value="all">All Types</option>
             <option value="Income">Income</option>
+            <option value="Interest">Interest</option>
             <option value="Transfer In">Transfer In</option>
-            <option value="Transfer Out">Transfer Out</option>
+            <option value="Refund">Refund</option>
+            <option value="Eating Out">Eating Out</option>
+            <option value="Groceries">Groceries</option>
+            <option value="Travel">Travel</option>
+            <option value="Gas">Gas</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Subscriptions">Subscriptions</option>
+            <option value="Health">Health</option>
             <option value="Bill">Bill</option>
             <option value="Expense">Expense</option>
+            <option value="Transfer Out">Transfer Out</option>
             <option value="Withdrawal">Withdrawal</option>
-            <option value="Refund">Refund</option>
           </select>
         </div>
         <div class="chart-container"><canvas id="ba-summary-trend-chart"></canvas></div>
@@ -680,6 +695,13 @@
         <option value="Entertainment">Entertainment</option>
         <option value="Subscriptions">Subscriptions</option>
         <option value="Health">Health</option>
+        <option value="Bill">Bill</option>
+        <option value="Income">Income</option>
+        <option value="Interest">Interest</option>
+        <option value="Transfer In">Transfer In</option>
+        <option value="Transfer Out">Transfer Out</option>
+        <option value="Withdrawal">Withdrawal</option>
+        <option value="Expense">Expense</option>
         <option value="Other">Other</option>
         <option value="Refund">Refund</option>
       </select>
@@ -1781,17 +1803,18 @@ function parseBankCSV(text) {
 
     if (useFallback) {
       // Assume: Date, Description, Debit, Credit
+      // Debit column = money OUT (expense), Credit column = money IN (deposit)
       date = cols[0];
       description = cols[1];
       const debit = parseFloat((cols[2] || '').replace(/[$,]/g, '')) || 0;
       const credit = parseFloat((cols[3] || '').replace(/[$,]/g, '')) || 0;
-      amount = credit > 0 ? credit : -debit;
+      amount = debit > 0 ? -debit : credit;
     } else if (hasDebitCredit) {
       date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
       description = descIdx >= 0 ? cols[descIdx] : cols[1];
       const debit = parseFloat((cols[debitIdx] || '').replace(/[$,]/g, '')) || 0;
       const credit = parseFloat((cols[creditIdx] || '').replace(/[$,]/g, '')) || 0;
-      amount = credit > 0 ? credit : -debit;
+      amount = debit > 0 ? -debit : credit;
     } else {
       date = dateIdx >= 0 ? cols[dateIdx] : cols[0];
       description = descIdx >= 0 ? cols[descIdx] : cols[1];
@@ -1866,19 +1889,127 @@ function confirmBAUpload() {
   refreshBankPage();
 }
 
+const BANK_OUTGOING_KEYWORDS = {
+  'Eating Out': ['restaurant','cafe','coffee','starbucks','tim horton','mcdonald','subway','pizza','sushi','uber eats','doordash','skip the dishes','grubhub','wendy','burger','taco','diner','bistro','grill','pho','ramen','chipotle','panera','noodle','thai','indian','chinese food','kfc','popeye','a&w','dairy queen','harvey','swiss chalet','boston pizza','earls','cactus club','joey','milestones','the keg','montanas','east side','jack astor','red lobster','olive garden','domino','papa john','little caesar','mary brown'],
+  'Groceries': ['grocery','supermarket','walmart','costco','loblaws','metro','sobeys','no frills','freshco','food basics','whole foods','safeway','save-on','independent','farm boy','longos','fortinos','zehrs','superstore','real canadian','t&t','shoppers drug mart','dollarama','bulk barn','market'],
+  'Travel': ['airline','air canada','westjet','hotel','airbnb','booking.com','expedia','flight','marriott','hilton','hyatt','travel','amtrak','via rail','porter','flair','swoop','delta','united','american air','british air','lufthansa','uber','lyft','taxi','cab','rental car','enterprise','hertz','avis','budget car','national car','airport'],
+  'Gas': ['gas','fuel','petro','shell','esso','petrocan','pioneer','ultramar','canadian tire gas','husky','mobil','chevron','sunoco','co-op gas','circle k','7-eleven fuel','pioneer gas'],
+  'Shopping': ['amazon','ebay','apple','microsoft','best buy','ikea','the bay','hudson','winners','homesense','marshalls','canadian tire','home depot','home hardware','rona','lowes','staples','indigo','chapters','sport chek','marks','atmosphere','old navy','gap','h&m','zara','roots','aritzia','lululemon','sephora','bath & body','nordstrom','simons','pottery barn','crate','west elm','wayfair','etsy'],
+  'Entertainment': ['netflix','spotify','disney','hbo','prime video','apple tv','cinema','theatre','movie','concert','ticket','ticketmaster','steam','playstation','xbox','nintendo','game','amusement','museum','zoo','aquarium','bowling','golf','ski','crave','paramount','peacock'],
+  'Subscriptions': ['subscription','membership','monthly','annual fee','premium','icloud','google storage','dropbox','adobe','microsoft 365','office 365','linkedin','gym','fitness','planet fitness','goodlife','anytime fitness','ymca','ywca','zoom','vpn','nordvpn'],
+  'Health': ['pharmacy','drug','medical','dental','doctor','clinic','hospital','optom','vision','prescription','health','wellness','vitamin','supplement','physio','chiropract','massage','psych','therap','lab','manulife','sun life','green shield','blue cross','great-west'],
+  'Bill': ['hydro','utility','insurance','mortgage','rent','phone','internet','rogers','bell','telus','fido','koodo','virgin','freedom','enbridge','toronto hydro','alectra','fortis','property tax','condo fee','strata','water bill','sewer','waste','cable'],
+  'Transfer Out': ['transfer','e-transfer','etransfer','interac'],
+  'Withdrawal': ['withdraw','atm','cash']
+};
+
 function categorizeBankTxn(description, amount) {
   const lower = description.toLowerCase();
   if (amount >= 0) {
-    if (lower.includes('salary') || lower.includes('payroll') || lower.includes('deposit') || lower.includes('income') || lower.includes('pay')) return 'Income';
-    if (lower.includes('transfer') || lower.includes('e-transfer') || lower.includes('etransfer')) return 'Transfer In';
-    if (lower.includes('refund') || lower.includes('rebate') || lower.includes('cashback')) return 'Refund';
+    if (lower.includes('salary') || lower.includes('payroll') || lower.includes('direct dep') || lower.includes('income') || lower.includes('pay ')) return 'Income';
+    if (lower.includes('transfer') || lower.includes('e-transfer') || lower.includes('etransfer') || lower.includes('interac')) return 'Transfer In';
+    if (lower.includes('refund') || lower.includes('rebate') || lower.includes('cashback') || lower.includes('reversal') || lower.includes('return')) return 'Refund';
+    if (lower.includes('interest')) return 'Interest';
     return 'Income';
   } else {
-    if (lower.includes('transfer') || lower.includes('e-transfer') || lower.includes('etransfer')) return 'Transfer Out';
-    if (lower.includes('withdraw') || lower.includes('atm')) return 'Withdrawal';
-    if (lower.includes('bill') || lower.includes('hydro') || lower.includes('utility') || lower.includes('insurance') || lower.includes('mortgage') || lower.includes('rent') || lower.includes('phone') || lower.includes('internet') || lower.includes('rogers') || lower.includes('bell') || lower.includes('telus') || lower.includes('fido') || lower.includes('koodo') || lower.includes('virgin') || lower.includes('freedom')) return 'Bill';
+    for (const [category, keywords] of Object.entries(BANK_OUTGOING_KEYWORDS)) {
+      for (const kw of keywords) {
+        if (lower.includes(kw)) return category;
+      }
+    }
     return 'Expense';
   }
+}
+
+// ════════════════════════════════════════════════════════════════
+// BANK ACCOUNTS — DRILL-DOWN
+// ════════════════════════════════════════════════════════════════
+
+let baDrilldownOpen = {};
+let baDrilldownSort = { field: 'date', dir: 'desc' };
+
+function drillDownBACategory(category, containerId, accountId, sortField) {
+  containerId = containerId || 'ba-summary-drilldown';
+  const container = document.getElementById(containerId);
+
+  // Toggle: if clicking same category without sort change, close it
+  if (!sortField && baDrilldownOpen[containerId] === category) {
+    container.innerHTML = '';
+    delete baDrilldownOpen[containerId];
+    return;
+  }
+
+  if (sortField) {
+    if (baDrilldownSort.field === sortField) {
+      baDrilldownSort.dir = baDrilldownSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      baDrilldownSort.field = sortField;
+      baDrilldownSort.dir = sortField === 'amount' ? 'desc' : 'asc';
+    }
+  } else {
+    baDrilldownSort = { field: 'date', dir: 'desc' };
+  }
+
+  baDrilldownOpen[containerId] = category;
+
+  const month = document.getElementById('ba-month-select').value;
+  let txns = baTransactions.filter(t => t.category === category && t.date.slice(0, 7) === month);
+  if (accountId) txns = txns.filter(t => t.accountId === accountId);
+
+  if (txns.length === 0) {
+    container.innerHTML = '';
+    delete baDrilldownOpen[containerId];
+    return;
+  }
+
+  // Sort
+  const acctNameMap = {};
+  bankAccounts.forEach(a => { acctNameMap[a.id] = a.name; });
+  txns.sort((a, b) => {
+    let cmp = 0;
+    switch (baDrilldownSort.field) {
+      case 'date': cmp = a.date.localeCompare(b.date); break;
+      case 'account': cmp = (acctNameMap[a.accountId] || '').localeCompare(acctNameMap[b.accountId] || ''); break;
+      case 'description': cmp = a.description.localeCompare(b.description); break;
+      case 'amount': cmp = a.amount - b.amount; break;
+    }
+    return baDrilldownSort.dir === 'asc' ? cmp : -cmp;
+  });
+
+  const badgeCls = 'badge-' + category.toLowerCase().replace(/\s/g, '');
+  const escapedCat = category.replace(/'/g, "\\'");
+  const escapedContainer = containerId.replace(/'/g, "\\'");
+  const acctArg = accountId ? ",'" + accountId.replace(/'/g, "\\'") + "'" : ",null";
+  const sf = baDrilldownSort.field;
+  const sd = baDrilldownSort.dir;
+  const sortCls = (f) => f === sf ? (sd === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
+
+  let html = `<div class="cat-drilldown">
+    <div class="cat-drilldown-header">
+      <span><span class="badge ${badgeCls}">${category}</span> &mdash; ${txns.length} transaction${txns.length !== 1 ? 's' : ''}</span>
+      <button class="cat-drilldown-close" onclick="document.getElementById('${escapedContainer}').innerHTML='';delete baDrilldownOpen['${escapedContainer}']">&times;</button>
+    </div>
+    <table><tr>
+      <th class="${sortCls('date')}" onclick="drillDownBACategory('${escapedCat}','${escapedContainer}'${acctArg},'date')">Date</th>
+      <th class="${sortCls('account')}" onclick="drillDownBACategory('${escapedCat}','${escapedContainer}'${acctArg},'account')">Account</th>
+      <th class="${sortCls('description')}" onclick="drillDownBACategory('${escapedCat}','${escapedContainer}'${acctArg},'description')">Description</th>
+      <th class="${sortCls('amount')}" onclick="drillDownBACategory('${escapedCat}','${escapedContainer}'${acctArg},'amount')">Amount</th>
+      <th></th>
+    </tr>`;
+  txns.forEach(t => {
+    const acct = bankAccounts.find(a => a.id === t.accountId);
+    const sign = t.direction === 'in' ? '+' : '-';
+    const colorCls = t.direction === 'in' ? 'text-success' : 'text-danger';
+    html += `<tr>
+      <td>${t.date}</td>
+      <td>${acct ? acct.name : 'Unknown'}</td>
+      <td>${t.description}</td>
+      <td class="${colorCls}">${sign}$${t.amount.toFixed(2)}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="openRecategorize('${t.id}','ba')">Re-cat</button></td>
+    </tr>`;
+  });
+  html += '</table></div>';
+  container.innerHTML = html;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1946,6 +2077,10 @@ function renderBASummary() {
       else outCats[t.category] = (outCats[t.category] || 0) + t.amount;
     });
 
+    const maxIn = Math.max(...Object.values(inCats), 1);
+    const maxOut = Math.max(...Object.values(outCats), 1);
+    const escapedAcctId = acct.id.replace(/'/g, "\\'");
+
     html += `<div style="margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border);">
       <h3 style="font-size:1rem;margin-bottom:12px;">${acct.name}</h3>
       <div class="grid grid-3" style="margin-bottom:16px;">
@@ -1956,17 +2091,45 @@ function renderBASummary() {
       <div style="display:flex;gap:32px;">
         <div style="flex:1;">
           <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">INCOMING</h4>
-          ${Object.entries(inCats).map(([cat, amt]) => `<div style="display:flex;justify-content:space-between;font-size:.875rem;padding:4px 0;"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>`).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
+          ${Object.entries(inCats).map(([cat, amt]) => {
+            const pct = (amt / maxIn * 100).toFixed(1);
+            const color = BA_CATEGORY_COLORS[cat] || '#94a3b8';
+            const escapedCat = cat.replace(/'/g, "\\'");
+            return `<div class="cat-bar" onclick="drillDownBACategory('${escapedCat}','ba-summary-drilldown','${escapedAcctId}')">
+              <div class="cat-label"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>
+              <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${color};"></div></div>
+            </div>`;
+          }).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
         </div>
         <div style="flex:1;">
           <h4 style="font-size:.813rem;color:var(--text-light);margin-bottom:8px;">OUTGOING</h4>
-          ${Object.entries(outCats).map(([cat, amt]) => `<div style="display:flex;justify-content:space-between;font-size:.875rem;padding:4px 0;"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>`).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
+          ${Object.entries(outCats).map(([cat, amt]) => {
+            const pct = (amt / maxOut * 100).toFixed(1);
+            const color = BA_CATEGORY_COLORS[cat] || '#94a3b8';
+            const escapedCat = cat.replace(/'/g, "\\'");
+            return `<div class="cat-bar" onclick="drillDownBACategory('${escapedCat}','ba-summary-drilldown','${escapedAcctId}')">
+              <div class="cat-label"><span>${cat}</span><span>$${amt.toFixed(2)}</span></div>
+              <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${color};"></div></div>
+            </div>`;
+          }).join('') || '<p class="text-muted" style="font-size:.813rem;">None</p>'}
         </div>
       </div>
     </div>`;
   });
 
   container.innerHTML = html;
+}
+
+let baTxnSort = { field: 'date', dir: 'desc' };
+
+function sortBATransactions(field) {
+  if (baTxnSort.field === field) {
+    baTxnSort.dir = baTxnSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    baTxnSort.field = field;
+    baTxnSort.dir = field === 'amount' ? 'desc' : 'asc';
+  }
+  renderBATransactions();
 }
 
 function renderBATransactions() {
@@ -1977,7 +2140,20 @@ function renderBATransactions() {
   if (acctFilter !== 'all') txns = txns.filter(t => t.accountId === acctFilter);
   if (monthFilter !== 'all') txns = txns.filter(t => t.date.slice(0, 7) === monthFilter);
 
-  txns.sort((a, b) => b.date.localeCompare(a.date));
+  // Sort
+  const acctNameMap = {};
+  bankAccounts.forEach(a => { acctNameMap[a.id] = a.name; });
+  txns.sort((a, b) => {
+    let cmp = 0;
+    switch (baTxnSort.field) {
+      case 'date': cmp = a.date.localeCompare(b.date); break;
+      case 'account': cmp = (acctNameMap[a.accountId] || '').localeCompare(acctNameMap[b.accountId] || ''); break;
+      case 'description': cmp = a.description.localeCompare(b.description); break;
+      case 'amount': cmp = a.amount - b.amount; break;
+      case 'category': cmp = (a.category || '').localeCompare(b.category || ''); break;
+    }
+    return baTxnSort.dir === 'asc' ? cmp : -cmp;
+  });
 
   const container = document.getElementById('ba-transactions-table');
   if (txns.length === 0) {
@@ -1985,17 +2161,28 @@ function renderBATransactions() {
     return;
   }
 
-  let html = '<div style="max-height:500px;overflow-y:auto;"><table><tr><th>Date</th><th>Account</th><th>Description</th><th>Amount</th><th>Type</th></tr>';
+  const sf = baTxnSort.field;
+  const sd = baTxnSort.dir;
+  const sortCls = (f) => f === sf ? (sd === 'asc' ? 'sortable sort-asc' : 'sortable sort-desc') : 'sortable';
+
+  let html = '<div style="max-height:500px;overflow-y:auto;"><table><tr>';
+  html += `<th class="${sortCls('date')}" onclick="sortBATransactions('date')">Date</th>`;
+  html += `<th class="${sortCls('account')}" onclick="sortBATransactions('account')">Account</th>`;
+  html += `<th class="${sortCls('description')}" onclick="sortBATransactions('description')">Description</th>`;
+  html += `<th class="${sortCls('amount')}" onclick="sortBATransactions('amount')">Amount</th>`;
+  html += `<th class="${sortCls('category')}" onclick="sortBATransactions('category')">Category</th>`;
+  html += '<th></th></tr>';
   txns.forEach(t => {
     const acct = bankAccounts.find(a => a.id === t.accountId);
-    const cls = t.direction === 'in' ? 'badge-income' : 'badge-expense';
+    const badgeCls = 'badge-' + (t.category || 'expense').toLowerCase().replace(/\s/g, '');
     const sign = t.direction === 'in' ? '+' : '-';
     html += `<tr>
       <td>${t.date}</td>
       <td>${acct ? acct.name : 'Unknown'}</td>
       <td>${t.description}</td>
       <td class="${t.direction === 'in' ? 'text-success' : 'text-danger'}">${sign}$${t.amount.toFixed(2)}</td>
-      <td><span class="badge ${cls}">${t.category || (t.direction === 'in' ? 'Income' : 'Expense')}</span></td>
+      <td><span class="badge ${badgeCls}">${t.category || (t.direction === 'in' ? 'Income' : 'Expense')}</span></td>
+      <td><button class="btn btn-sm btn-secondary" onclick="openRecategorize('${t.id}','ba')">Re-cat</button></td>
     </tr>`;
   });
   html += '</table></div>';
@@ -2124,9 +2311,10 @@ function renderBATrend() {
 // ════════════════════════════════════════════════════════════════
 
 const BA_CATEGORY_COLORS = {
-  'Income': '#22c55e', 'Transfer In': '#3b82f6', 'Refund': '#06b6d4',
-  'Bill': '#ef4444', 'Expense': '#f59e0b', 'Transfer Out': '#8b5cf6',
-  'Withdrawal': '#ec4899'
+  'Income': '#22c55e', 'Transfer In': '#3b82f6', 'Refund': '#06b6d4', 'Interest': '#10b981',
+  'Eating Out': '#f59e0b', 'Groceries': '#22c55e', 'Travel': '#3b82f6', 'Gas': '#6366f1',
+  'Shopping': '#ec4899', 'Entertainment': '#8b5cf6', 'Subscriptions': '#06b6d4', 'Health': '#ef4444',
+  'Bill': '#f97316', 'Expense': '#eab308', 'Transfer Out': '#a855f7', 'Withdrawal': '#f43f5e'
 };
 
 function getBACategoryMonthlyData(txns, catFilter) {
@@ -2354,6 +2542,23 @@ function clearAllData() {
     }
   });
   if (changed) persistCCTxn();
+})();
+
+// Migrate: re-categorize bank transactions with detailed categories
+(function migrateBankCategories() {
+  let changed = false;
+  baTransactions.forEach(t => {
+    const oldCat = t.category;
+    const newCat = categorizeBankTxn(t.description, t.direction === 'in' ? t.amount : -t.amount);
+    // Only re-categorize if still using old generic categories
+    if (oldCat === 'Expense' || oldCat === 'Bill' || oldCat === 'Income') {
+      if (newCat !== oldCat) {
+        t.category = newCat;
+        changed = true;
+      }
+    }
+  });
+  if (changed) persistBATxn();
 })();
 
 refreshCCPage();
